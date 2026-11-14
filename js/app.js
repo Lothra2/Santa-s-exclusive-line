@@ -63,6 +63,7 @@ let current = 'phone';
 const leaveHooks = {};
 async function go(name, opts = {}) {
   if (leaveHooks[current]) leaveHooks[current]();
+  if (!$('#modal').classList.contains('hidden')) { modalLocked = false; closeModal(); }
   A.stopVoice();
   const doSwitch = async () => {
     $$('.screen').forEach((s) => s.classList.remove('active'));
@@ -87,7 +88,8 @@ function openModal(html, onClose) {
   return $('#modal-box');
 }
 function closeModal() { $('#modal').classList.add('hidden'); A.stopVoice(); const f = modalClose; modalClose = null; f && f(); }
-$('#modal').addEventListener('click', (e) => { if (e.target.id === 'modal') closeModal(); });
+let modalLocked = false;
+$('#modal').addEventListener('click', (e) => { if (e.target.id === 'modal' && !modalLocked) closeModal(); });
 
 // Escribe el texto letra por letra con sonidito y lo lee en voz alta
 async function sayIn(el, text, { who = 'narrator', actor = null, voice = true, spoken = null, speed = 26 } = {}) {
@@ -431,23 +433,31 @@ $('#btn-who').addEventListener('click', () => { A.sfx.tap(); go('who'); });
 let sessionStart = Date.now();
 async function showReports() {
   const kid = S().kid;
-  const seen = S().seen[kid] || 0;
-  const fresh = S().stars.filter((s) => s.ts > seen && s.ts < sessionStart && (kid === 'both' || s.kid === kid || s.kid === 'both'));
-  if (!fresh.length) return false;
-  const shownUntil = Math.max(...fresh.map((s) => s.ts));
-  update((s) => (s.seen[kid] = Math.max(s.seen[kid] || 0, shownUntil)));
-  for (const s of fresh) {
+  const pending = () => S().stars
+    .filter((s) => s.ts < sessionStart && s.ts > (S().seen[kid] || 0) && (kid === 'both' || s.kid === kid || s.kid === 'both') && !(s.readBy || []).includes(kid))
+    .sort((x, y) => x.ts - y.ts);
+  if (!pending().length) return false;
+  for (const s of pending()) {
     if (current !== 'hub') return true;
     A.sfx.fanfare(); skyFx('stars');
     const who = s.kid === 'both' ? t('both') : KIDS[s.kid].name;
-    const line = lang() === 'es' ? `¡${who} ganó una estrella! ${cap(s.reason)}.${s.reward ? ` Premio: ${s.reward}.` : ''}` : `${who} earned a star! ${cap(s.reason)}.${s.reward ? ` Reward: ${s.reward}.` : ''}`;
-    const box = openModal(`<h2>${t('newReport')}</h2><canvas class="gift-big" id="rep-star"></canvas><p id="rep-text"></p><button class="pix-btn green" id="rep-ok">⭐ ${t('calClose')}</button>`);
+    const line = `¡${who} ganó una estrella! ${cap(s.reason)}.${s.reward ? ` Premio: ${s.reward}.` : ''}`;
+    const box = openModal(`<h2>${t('newReport')}</h2><canvas class="gift-big" id="rep-star"></canvas><p id="rep-text"></p><button class="pix-btn green" id="rep-ok">⭐ ¡Entendido!</button>`);
+    modalLocked = true; // solo se cierra con el botón, para que no se marque como leída por accidente
     const cv = box.querySelector('#rep-star'); const src = bigIcon('star'); cv.width = src.width; cv.height = src.height; cv.getContext('2d').drawImage(src, 0, 0);
     cv.style.animation = 'bob 1s ease-in-out infinite';
-    const closed = new Promise((r) => { box.querySelector('#rep-ok').onclick = () => { A.sfx.tap(); closeModal(); r(); }; modalClose = r; });
     if (workshop) workshop.elves.green.do('cheer');
     sayIn(box.querySelector('#rep-text'), line, { who: 'green', actor: workshop && workshop.elves.green });
-    await closed;
+    const read = await new Promise((r) => {
+      box.querySelector('#rep-ok').onclick = () => { A.sfx.sparkle(); modalLocked = false; modalClose = null; closeModal(); r(true); };
+      modalClose = () => r(false);
+    });
+    modalLocked = false;
+    if (!read) return true; // se fue sin tocar Entendido: queda pendiente
+    // marcada como leída por esta niña: no vuelve a salir nunca más
+    const readers = kid === 'both' ? ['both', 'sophie', 'alana'] : [kid];
+    update((st) => { const it = st.stars.find((x) => x.id === s.id); if (it) { it.readBy = [...new Set([...(it.readBy || []), ...readers])]; } });
+    if (workshop) { workshop.elves.green.do('cheer'); workshop.elves.green.heart(); }
   }
   return true;
 }
@@ -900,7 +910,7 @@ const p = (k, ...a) => { const v = P[lang()][k]; return typeof v === 'function' 
 function whoSeg(sel) {
   return `<div class="seg" data-seg>${['sophie', 'alana', 'both'].map((k) => `<button data-who="${k}" class="${sel === k ? 'on' : ''}">${kidLabel(k)}</button>`).join('')}</div>`;
 }
-const starPending = (st) => ['sophie', 'alana'].some((k) => (st.kid === k || st.kid === 'both') && st.ts > (S().seen[k] || 0));
+const starPending = (st) => ['sophie', 'alana'].some((k) => (st.kid === k || st.kid === 'both') && st.ts > (S().seen[k] || 0) && !(st.readBy || []).includes(k));
 function renderPanel() {
   const s = S();
   const tabs = `<div class="tabs">${['today', 'cal', 'wishes', 'settings'].map((k) => `<button data-tab="${k}" class="${parentsTab === k ? 'on' : ''}">${p(k)}</button>`).join('')}</div>`;
