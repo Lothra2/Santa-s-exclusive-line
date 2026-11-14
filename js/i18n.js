@@ -26,6 +26,8 @@ const T = {
     namePlaceholder: 'Escribe mi nombre',
     nameOk: '¡Ese es mi nombre!',
     nameLove: (n) => `¡Me encanta! ¡Desde hoy me llamo ${n}!`,
+    nameLoveVoice: '¡Me encanta! ¡Desde hoy ese es mi nombre!',
+    phoneHello: '¡Polo Norte, taller de Santa! ¿Quién nos llama?',
     nameDone: '¡Ya somos sus elfos oficiales! Ahora pueden llamarnos cuando quieran.',
     nameSuggest: ['Copito', 'Chispita', 'Jengibre', 'Cascabel', 'Galletín', 'Menta', 'Turrón', 'Brillito', 'Pinito', 'Bombón', 'Canelita', 'Escarchita'],
     // chat
@@ -88,6 +90,8 @@ const T = {
     namePlaceholder: 'Type my name',
     nameOk: "That's my name!",
     nameLove: (n) => `I love it! From now on my name is ${n}!`,
+    nameLoveVoice: 'I love it! From now on, that is my name!',
+    phoneHello: "North Pole, Santa's workshop! Who's calling?",
     nameDone: "Now we're your official elves! You can call us any time.",
     nameSuggest: ['Jingle', 'Sparkle', 'Cookie', 'Snowball', 'Twinkle', 'Peppermint', 'Buttons', 'Pudding', 'Tinsel', 'Gumdrop', 'Frosty', 'Cocoa'],
     chatWith: 'Talking with',

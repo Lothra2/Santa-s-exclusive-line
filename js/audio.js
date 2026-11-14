@@ -277,9 +277,42 @@ function pickVoice(lang, prefer) {
 
 let speaking = null;
 let audioEl = null;
+let voiceSrc = null;
+
+/* ---------- Voces grabadas (Fish Audio) ----------
+   Cada frase fija tiene un archivo audio/<hash>.mp3. El hash es FNV-1a de "voz|texto". */
+let recorded = new Set();
+const bufCache = new Map();
+export async function loadRecorded() {
+  try { const r = await fetch('audio/manifest.json', { cache: 'no-cache' }); const j = await r.json(); recorded = new Set(j.files || []); } catch (e) { recorded = new Set(); }
+}
+export function cleanText(text) {
+  return String(text).replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/gu, '').replace(/\*/g, '').replace(/\s+/g, ' ').trim();
+}
+export function voiceHash(who, lang, text) {
+  const bytes = new TextEncoder().encode(`${who}_${lang}|${cleanText(text)}`);
+  let h = 0x811c9dc5;
+  for (const b of bytes) { h ^= b; h = Math.imul(h, 0x01000193) >>> 0; }
+  return h.toString(16).padStart(8, '0');
+}
+// En inglés el elfo de las rayas usa la misma voz que el de la bufanda, un poquito más aguda
+const RATE = { stripe_en: 1.1 };
+async function getBuf(hash) {
+  if (bufCache.has(hash)) return bufCache.get(hash);
+  const p = fetch(`audio/${hash}.mp3`).then((r) => { if (!r.ok) throw new Error('404'); return r.arrayBuffer(); })
+    .then((ab) => new Promise((res, rej) => ctx.decodeAudioData(ab, res, rej)));
+  bufCache.set(hash, p);
+  p.catch(() => bufCache.delete(hash));
+  return p;
+}
+export function preloadVoice(who, lang, text) {
+  if (!ctx) return; const h = voiceHash(who, lang, text); if (recorded.has(h)) getBuf(h).catch(() => {});
+}
+
 export function stopVoice() {
   try { if (window.speechSynthesis) speechSynthesis.cancel(); } catch (e) {}
   if (audioEl) { audioEl.pause(); audioEl = null; }
+  if (voiceSrc) { try { voiceSrc.stop(); } catch (e) {} voiceSrc = null; }
   if (speaking) { const s = speaking; speaking = null; s.done && s.done(); }
   duck(false);
 }
@@ -300,7 +333,8 @@ export const VOICE = {
 export function speak(text, { who = 'narrator', lang = 'es', file = null, onStart, onTick } = {}) {
   stopVoice();
   return new Promise((resolve) => {
-    const clean = String(text).replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, '').replace(/\*/g, '').trim();
+    const clean = cleanText(text);
+    const hash = voiceHash(who, lang, clean);
     const me = { done: resolve };
     speaking = me;
     let tick = null;
@@ -314,6 +348,18 @@ export function speak(text, { who = 'narrator', lang = 'es', file = null, onStar
       return;
     }
     duck(true);
+    if (ctx && recorded.has(hash)) {
+      getBuf(hash).then((buf) => {
+        if (speaking !== me) return;
+        const src = ctx.createBufferSource(); src.buffer = buf;
+        src.playbackRate.value = RATE[`${who}_${lang}`] || 1;
+        const g = ctx.createGain(); g.gain.value = 1.15; src.connect(g); g.connect(master);
+        src.onended = () => { if (voiceSrc === src) voiceSrc = null; finish(); };
+        voiceSrc = src; src.start();
+        onStart && onStart(); tick = setInterval(() => onTick && onTick(), 110);
+      }).catch(() => viaSynth());
+      return;
+    }
     if (file) {
       audioEl = new Audio(file);
       audioEl.onplay = () => { onStart && onStart(); tick = setInterval(() => onTick && onTick(), 110); };

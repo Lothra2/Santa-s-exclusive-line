@@ -14,6 +14,7 @@ const $$ = (s) => [...document.querySelectorAll(s)];
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const cap = (s) => String(s).replace(/^./, (c) => c.toUpperCase());
+const kidNames = (k) => (k === 'both' ? (lang() === 'es' ? 'Sophie y Alana' : 'Sophie and Alana') : KIDS[k].name);
 const kidLabel = (k) => (k === 'both' ? t('both') : KIDS[k].name);
 
 load(); save();
@@ -89,10 +90,10 @@ function closeModal() { $('#modal').classList.add('hidden'); A.stopVoice(); cons
 $('#modal').addEventListener('click', (e) => { if (e.target.id === 'modal') closeModal(); });
 
 // Escribe el texto letra por letra con sonidito y lo lee en voz alta
-async function sayIn(el, text, { who = 'narrator', actor = null, voice = true } = {}) {
+async function sayIn(el, text, { who = 'narrator', actor = null, voice = true, spoken = null } = {}) {
   let skip = false; const onSkip = () => (skip = true); el.addEventListener('click', onSkip, { once: true });
   el.textContent = '';
-  const speakP = voice && S().voice ? A.speak(text, { who, lang: lang(), onStart: () => actor && (actor.talking = true) }) : null;
+  const speakP = voice && S().voice ? A.speak(spoken || text, { who, lang: lang(), onStart: () => actor && (actor.talking = true) }) : null;
   if (actor && !speakP) actor.talking = true;
   const pitch = (A.VOICE[who] || A.VOICE.narrator).blip;
   for (let i = 0; i < text.length; i++) {
@@ -166,7 +167,9 @@ async function callNorthPole() {
   await sleep(1400);
   A.sfx.connect(); skyFx('sparkle');
   $('#phone-msg').textContent = '✨ ' + t('connected') + ' ✨';
-  await sleep(1100);
+  await sleep(700);
+  await A.speak(t('phoneHello'), { who: 'stripe', lang: lang() });
+  await sleep(200);
   cancelAnimationFrame(phoneRAF);
   go('who');
 }
@@ -198,7 +201,7 @@ $$('.who-card').forEach((b) => {
     A.sfx.jingle();
     update((s) => (s.kid = k));
     applyTexts();
-    A.speak(lang() === 'es' ? `¡Hola, ${kidLabel(k)}!` : `Hi, ${kidLabel(k)}!`, { who: 'stripe', lang: lang() });
+    A.speak(lang() === 'es' ? `¡Hola, ${kidNames(k)}!` : `Hi, ${kidNames(k)}!`, { who: 'stripe', lang: lang() });
     await sleep(500);
     go(S().named ? 'hub' : 'naming');
   });
@@ -257,7 +260,7 @@ ENTER.naming = async () => {
     if (!alive) return;
     update((s) => (s.elves[a.id] = name));
     a.do('cheer'); a.heart(); A.sfx.fanfare(); skyFx('sparkle');
-    await sayIn(txt, t('nameLove', name), { who: a.id, actor: a });
+    await sayIn(txt, t('nameLove', name), { who: a.id, actor: a, spoken: t('nameLoveVoice') });
   }
   actors.forEach((o) => { o.highlight = false; o.dim = false; o.do('dance'); });
   update((s) => (s.named = true));
@@ -316,7 +319,7 @@ ENTER.hub = async () => {
   if (current !== 'hub') return;
   if (!(await showReports())) {
     if (!(tday && tday.opened) && !ENTER.hub.told) { ENTER.hub.told = true; hubSay('green', lang() === 'es' ? '¡Hay un regalo nuevo en el calendario mágico!' : "There's a new gift in the magic calendar!"); }
-    else if (!ENTER.hub.greeted) { ENTER.hub.greeted = true; const id = ELF_IDS[Math.floor(Math.random() * 3)]; hubSay(id, lang() === 'es' ? `¡Hola, ${kidLabel(S().kid)}! Toca a un elfo.` : `Hi, ${kidLabel(S().kid)}! Tap an elf.`); }
+    else if (!ENTER.hub.greeted) { ENTER.hub.greeted = true; const id = ELF_IDS[Math.floor(Math.random() * 3)]; hubSay(id, lang() === 'es' ? `¡Hola, ${kidNames(S().kid)}! Toca a un elfo.` : `Hi, ${kidNames(S().kid)}! Tap an elf.`); }
   }
 };
 function placeTags() {
@@ -825,6 +828,7 @@ $('#btn-sound').addEventListener('click', () => {
 applyTexts();
 paintIcons();
 initSky($('#sky'));
+A.loadRecorded();
 tickCountdown();
 // Al volver a la app después de un rato, se vuelve a "llamar"
 let hiddenAt = 0;

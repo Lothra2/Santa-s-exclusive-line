@@ -356,3 +356,11 @@ select.pix-input { appearance: none; -webkit-appearance: none; }
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: .01s !important; animation-iteration-count: 1 !important; }
 }
+
+/* iPad: aprovechar más pantalla */
+@media (min-width: 760px) {
+  #app, #topbar { max-width: 720px; }
+  .chat-stage { max-height: 30vh; }
+  .cal-grid { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); }
+  .cal-cell canvas { width: 64px; }
+}
