@@ -197,6 +197,8 @@ textarea.pix-input { height: 84px; padding: 10px 14px; resize: none; }
 .hub-foot { display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
 .lock-btn { width: 40px; height: 40px; display: grid; place-items: center; opacity: .55; }
 .lock-btn .ico { width: 24px; height: 20px; }
+.phone-lock { position: absolute; right: 4px; bottom: calc(env(safe-area-inset-bottom) + 4px); }
+#scr-phone { position: relative; }
 
 /* ---------- Bautizo ---------- */
 #scr-naming { justify-content: center; }
@@ -364,3 +366,5 @@ select.pix-input { appearance: none; -webkit-appearance: none; }
   .cal-grid { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); }
   .cal-cell canvas { width: 64px; }
 }
+.panel .pix-input { flex: none; width: 100%; }
+.panel .row .pix-btn, .panel .row label.pix-btn { flex: 1; }

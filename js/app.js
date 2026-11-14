@@ -764,7 +764,7 @@ function bindPanel() {
   const r = $('#parents-root');
   r.querySelectorAll('[data-tab]').forEach((b) => b.onclick = () => { parentsTab = b.dataset.tab; renderPanel(); });
   r.querySelectorAll('[data-who]').forEach((b) => b.onclick = () => { parentWho = b.dataset.who; renderPanel(); });
-  r.querySelector('#pp-close').onclick = () => go('hub');
+  r.querySelector('#pp-close').onclick = () => go(homeScreen());
   const on = (id, fn) => { const el = r.querySelector(id); if (el) el.onclick = fn; };
   on('#pd-save', () => { const v = $('#pd-text').value.trim(); if (!v) return; update((s) => s.diary.push({ id: uid(), date: today(), kid: parentWho, text: v })); toast(p('saved')); renderPanel(); });
   on('#ps-save', () => {
@@ -797,7 +797,7 @@ function bindPanel() {
     } else { res.textContent = p('badKimi', out.error); res.className = 'err'; }
   });
   on('#pe-save', () => { update((s) => r.querySelectorAll('[data-elfname]').forEach((i) => (s.elves[i.dataset.elfname] = i.value.trim()))); toast(p('saved')); });
-  on('#pe-rebapt', () => { update((s) => { s.elves = { scarf: '', stripe: '', green: '' }; s.named = false; }); go('naming'); });
+  on('#pe-rebapt', () => { update((s) => { s.elves = { scarf: '', stripe: '', green: '' }; s.named = false; }); toast(p('saved')); go('phone'); });
   r.querySelectorAll('[data-voice]').forEach((b) => b.onclick = () => { update((s) => (s.voice = b.dataset.voice === '1')); renderPanel(); });
   const ld = r.querySelector('#pl-date'); if (ld) ld.onchange = () => { if (ld.value && ld.value <= today()) { update((s) => (s.launch = ld.value)); toast(p('saved')); } };
   on('#pb-exp', () => {
@@ -809,9 +809,11 @@ function bindPanel() {
   on('#pr-reset', () => { if (confirm(p('resetQ'))) { resetAll(); applyTexts(); renderPanel(); } });
 }
 $('#btn-parents').addEventListener('click', () => { A.sfx.tap(); go('parents'); });
+$('#btn-parents-phone').addEventListener('click', (e) => { e.stopPropagation(); cancelAnimationFrame(phoneRAF); go('parents'); });
+const homeScreen = () => (S().named ? 'hub' : 'phone');
 
 /* ================== barra superior ================== */
-$('#btn-back').addEventListener('click', () => { A.sfx.tap(); go('hub'); });
+$('#btn-back').addEventListener('click', () => { A.sfx.tap(); go(current === 'parents' ? homeScreen() : 'hub'); });
 $('#btn-lang').addEventListener('click', () => {
   A.unlock(); A.sfx.tap(); A.stopVoice();
   update((s) => (s.lang = s.lang === 'es' ? 'en' : 'es'));
