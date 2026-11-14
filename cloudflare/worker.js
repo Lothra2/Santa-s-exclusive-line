@@ -1,4 +1,4 @@
-// VERSIÓN 5. Puente del Polo Norte (Cloudflare Worker): voces de Fish Audio y conversaciones con Kimi.
+// VERSIÓN 6. Puente del Polo Norte (Cloudflare Worker): voces de Fish Audio y conversaciones con Kimi.
 // Secretos en Cloudflare:
 //   FISH_API_KEY  key de Fish Audio
 //   KIMI_API_KEY  key de Kimi (Moonshot)
@@ -7,6 +7,7 @@
 //
 // Rutas:  POST /      o /tts   → audio mp3 con la voz pedida
 //         POST /chat           → respuesta de Kimi (formato chat/completions)
+//         POST /asr            → texto de lo que dijo la niña (audio grabado → Fish Audio)
 //         GET  /status         → qué está configurado
 const VOICES = {
   santa_es: '7e778565d6c04034b8f8dacbd4418cc7',
@@ -105,9 +106,30 @@ export default {
     if (url.pathname === '/status') {
       let kimi = null;
       if (env.KIMI_API_KEY) { try { const c = await findKimi(env); kimi = { base: c.base, model: c.models[0], candidates: c.models, working: c.ok, available: c.ids.slice(0, 40) }; } catch (e) { kimi = { error: e.message }; } }
-      return json({ fish: !!env.FISH_API_KEY, kimi });
+      return json({ version: 6, fish: !!env.FISH_API_KEY, asr: !!env.FISH_API_KEY, kimi });
     }
     if (req.method !== 'POST') return text('Método no permitido', 405);
+
+    // ---- Oído: voz grabada → texto con Fish Audio ----
+    if (url.pathname === '/asr') {
+      if (!env.FISH_API_KEY) return text('Fish no está configurado', 501);
+      const type = (req.headers.get('content-type') || 'audio/webm').split(';')[0];
+      const audio = await req.arrayBuffer();
+      if (audio.byteLength < 800 || audio.byteLength > 5000000) return text('Audio inválido', 400);
+      const ext = type.includes('mp4') || type.includes('aac') || type.includes('m4a') ? 'm4a' : type.includes('wav') ? 'wav' : type.includes('mpeg') ? 'mp3' : type.includes('ogg') ? 'ogg' : 'webm';
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const fd = new FormData();
+        fd.append('audio', new Blob([audio], { type }), `voz.${ext}`);
+        fd.append('language', 'es');
+        fd.append('ignore_timestamps', 'true');
+        const r = await fetch('https://api.fish.audio/v1/asr', { method: 'POST', headers: { Authorization: `Bearer ${env.FISH_API_KEY}` }, body: fd });
+        if (r.ok) { const j = await r.json(); return json({ text: String(j.text || '').trim() }); }
+        if (r.status !== 429 && r.status < 500) return text(`Fish ASR respondió ${r.status}`, 502);
+        await new Promise((ok) => setTimeout(ok, 700));
+      }
+      return text('Fish ASR no respondió', 502);
+    }
+
     let body;
     try { body = await req.json(); } catch { return text('JSON inválido', 400); }
 
@@ -127,11 +149,16 @@ export default {
     const say = String(body.text || '').trim();
     const ref = VOICES[body.voice];
     if (!ref || !say || say.length > 1200) return text('Petición inválida', 400);
-    const r = await fetch('https://api.fish.audio/v1/tts', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${env.FISH_API_KEY}`, 'Content-Type': 'application/json', model: 's1' },
-      body: JSON.stringify({ text: say, reference_id: ref, format: 'mp3', mp3_bitrate: 64, normalize: true }),
-    });
+    let r;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      r = await fetch('https://api.fish.audio/v1/tts', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${env.FISH_API_KEY}`, 'Content-Type': 'application/json', model: 's1' },
+        body: JSON.stringify({ text: say, reference_id: ref, format: 'mp3', mp3_bitrate: 64, normalize: true }),
+      });
+      if (r.ok || (r.status !== 429 && r.status < 500)) break;
+      await new Promise((ok) => setTimeout(ok, 600 * (attempt + 1)));
+    }
     if (!r.ok) return text(`Fish Audio respondió ${r.status}`, 502);
     return new Response(r.body, { headers: { ...cors, 'Content-Type': 'audio/mpeg', 'Cache-Control': 'no-store' } });
   },

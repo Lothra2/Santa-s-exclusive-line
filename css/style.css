@@ -423,3 +423,5 @@ select.pix-input { appearance: none; -webkit-appearance: none; }
 .msg.typing .signal i:nth-child(1) { height: 5px; } .msg.typing .signal i:nth-child(2) { height: 9px; animation-delay: .2s; }
 .msg.typing .signal i:nth-child(3) { height: 13px; animation-delay: .4s; } .msg.typing .signal i:nth-child(4) { height: 16px; animation-delay: .6s; }
 @keyframes sig { 50% { opacity: .25; } }
+
+.call-status[data-level]::after { content: attr(data-level); display: block; font-size: 12px; letter-spacing: 2px; color: #fff3a0; margin-top: 2px; }

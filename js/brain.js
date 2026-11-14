@@ -186,3 +186,15 @@ export async function extractMemories(kid, kidMessages) {
     return arr.filter((x) => typeof x === 'string' && x.trim()).slice(0, 3).map((x) => x.trim());
   } catch (e) { return []; }
 }
+
+export const serverReady = () => viaServer();
+// Convierte la voz grabada en texto (Fish Audio por el Worker)
+export async function transcribe(blob) {
+  if (!viaServer()) throw new Error('sin servidor');
+  const ctl = new AbortController(); const tm = setTimeout(() => ctl.abort(), 20000);
+  try {
+    const r = await fetch(serverURL('/asr'), { method: 'POST', headers: { 'Content-Type': blob.type || 'audio/webm', 'x-token': S().voiceServer.token || '' }, body: blob, signal: ctl.signal });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return String((await r.json()).text || '').trim();
+  } finally { clearTimeout(tm); }
+}

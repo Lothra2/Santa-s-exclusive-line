@@ -7,7 +7,7 @@ import { ElfActor, SantaActor } from './actors.js';
 import { elf, phone, icon, bigIcon, gift, smallStar, ELF_IDS } from './sprites.js';
 import { toURL } from './pix.js';
 import { dayContent, TAP_LINES } from './content.js';
-import { elfReply, elfGreeting, santaMessage, hasKimi, testKimi, extractMemories, serverStatus } from './brain.js';
+import { elfReply, elfGreeting, santaMessage, hasKimi, testKimi, extractMemories, serverStatus, transcribe, serverReady } from './brain.js';
 
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
@@ -291,7 +291,65 @@ function askName(actor) {
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 let rec = null;
 // Escucha una frase. onText(texto) si dijeron algo, onEnd(seEscuchoAlgo, error) al terminar.
+// Con el Worker: graba la voz y la transcribe Fish (funciona igual en Safari y en la app de inicio).
+// Sin Worker: usa el dictado del navegador.
+let recorder = null;
 function listen(btn, onText, onEnd) {
+  if (serverReady() && navigator.mediaDevices && window.MediaRecorder) return listenRecorded(btn, onText, onEnd);
+  return listenDictation(btn, onText, onEnd);
+}
+function micLevel(v) {
+  const el = $('#call-status');
+  if (!el || el.classList.contains('hidden')) return;
+  const bars = Math.round(Math.min(1, v * 6) * 8);
+  el.dataset.level = '▮'.repeat(bars) + '▯'.repeat(8 - bars);
+}
+async function listenRecorded(btn, onText, onEnd) {
+  if (recorder) { recorder.stopNow(); return; }
+  A.stopVoice(); A.duck(true);
+  try { if (navigator.audioSession) navigator.audioSession.type = 'play-and-record'; } catch (e) {}
+  let stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } }); }
+  catch (e) {
+    A.duck(false); try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (x) {}
+    toast('🎙️ Hay que darle permiso al micrófono'); onEnd && onEnd(false, 'not-allowed'); return;
+  }
+  const types = ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm', 'audio/ogg'];
+  const mime = types.find((t) => MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t)) || '';
+  const mr = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+  const chunks = []; mr.ondataavailable = (e) => e.data && e.data.size && chunks.push(e.data);
+  // medidor de voz para saber cuándo empezó y terminó de hablar
+  const AC = window.AudioContext || window.webkitAudioContext; const ac = new AC();
+  const srcNode = ac.createMediaStreamSource(stream); const an = ac.createAnalyser(); an.fftSize = 1024; srcNode.connect(an);
+  const data = new Uint8Array(an.fftSize);
+  let spoke = false, lastVoice = 0, finished = false; const t0 = performance.now();
+  btn.classList.add('on'); A.sfx.pop();
+  const cleanup = () => { clearInterval(meter); try { stream.getTracks().forEach((t) => t.stop()); } catch (e) {} try { ac.close(); } catch (e) {} btn.classList.remove('on'); recorder = null; A.duck(false); try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) {} };
+  const meter = setInterval(() => {
+    an.getByteTimeDomainData(data);
+    let sum = 0; for (let i = 0; i < data.length; i++) { const v = (data[i] - 128) / 128; sum += v * v; }
+    const rms = Math.sqrt(sum / data.length); const now = performance.now();
+    micLevel(rms);
+    if (rms > 0.035) { if (!spoke && now - t0 > 250) spoke = true; lastVoice = now; }
+    if (spoke && now - lastVoice > 1300) stop();          // terminó de hablar
+    if (!spoke && now - t0 > 7000) stop();                // no dijo nada
+    if (now - t0 > 15000) stop();                         // máximo 15 segundos
+  }, 80);
+  function stop() { if (finished) return; finished = true; try { mr.stop(); } catch (e) { cleanup(); onEnd && onEnd(false, 'rec'); } }
+  mr.onstop = async () => {
+    cleanup();
+    if (!spoke || !chunks.length) { onEnd && onEnd(false, null); return; }
+    const blob = new Blob(chunks, { type: (mr.mimeType || mime || 'audio/webm').split(';')[0] });
+    setCallStatus(true, '✨ Escuchando tu voz mágica…');
+    try {
+      const text = await transcribe(blob);
+      if (text) { onText(text); onEnd && onEnd(true, null); } else onEnd && onEnd(false, null);
+    } catch (e) { toast('📡 La señal se cortó un poquito. ¡Intenta otra vez!'); onEnd && onEnd(false, 'asr'); }
+  };
+  recorder = { stopNow: stop };
+  mr.start(250);
+}
+function listenDictation(btn, onText, onEnd) {
   if (!SR) { toast('Este dispositivo no tiene micrófono mágico. ¡Escribe o usa los botones!'); onEnd && onEnd(false, 'no-sr'); return; }
   if (rec) { rec.stop(); return; }
   A.stopVoice(); A.duck(true);
@@ -391,6 +449,7 @@ const greeted = new Set();
 ENTER.chat = async () => {
   if (A.currentSong() !== 'deck') A.playSong('deck', { vol: 0.35 });
   applyChatMode();
+  if (!S().voiceServer.url) toast('🔌 Papás: este dispositivo no está conectado a Kimi. Candado → Ajustes → Conexión.', 6000);
   renderTabs();
   $('#chat-quick').innerHTML = t('quick').map((q) => `<button class="chip">${esc(q)}</button>`).join('');
   $$('#chat-quick .chip').forEach((b) => (b.onclick = () => { A.sfx.tap(); sendChat(b.textContent.replace(/^[^\p{L}¡¿]+/u, '')); }));
@@ -556,7 +615,7 @@ $('#chat-text').addEventListener('keydown', (e) => { if (e.key === 'Enter') send
 let callMode = false, callQuiet = 0;
 function setCallStatus(on, msg) {
   const el = $('#call-status');
-  el.classList.toggle('hidden', !on); if (msg) el.textContent = msg;
+  el.classList.toggle('hidden', !on); if (msg) { el.textContent = msg; delete el.dataset.level; }
 }
 function callListen() {
   if (!callMode || chatBusy || current !== 'chat') return;
@@ -565,13 +624,14 @@ function callListen() {
     if (!callMode) return;
     if (heard) return; // sendChat se encarga de volver a escuchar
     if (err === 'not-allowed' || err === 'service-not-allowed' || err === 'no-sr' || err === 'start') { stopCall(); return; }
+    if (err === 'asr') { setTimeout(callListen, 600); return; }
     callQuiet++;
     if (callQuiet >= 2) { stopCall('📞 Toca el micrófono para seguir hablando'); return; }
     setTimeout(callListen, 300);
   });
 }
 function stopCall(msg) {
-  callMode = false; callQuiet = 0; if (rec) rec.stop();
+  callMode = false; callQuiet = 0; if (rec) rec.stop(); if (recorder) recorder.stopNow();
   $('#chat-mic').classList.remove('call');
   if (msg) { setCallStatus(true, msg); setTimeout(() => { if (!callMode) setCallStatus(false); }, 4000); } else setCallStatus(false);
 }
@@ -860,7 +920,12 @@ function renderPanel() {
       <h3>🧠 ${p('memTitle')}</h3><p class="help">${p('memHelp')}</p>
       ${s.memories.length ? s.memories.slice().reverse().map((m) => `<div class="list-item"><div>${esc(m.text)}<br><small>${kidLabel(m.kid)} · ${m.date}</small></div><button class="x" data-del="m:${m.id}">✕</button></div>`).join('') : `<p class="help">${p('memNone')}</p>`}`;
   } else {
-    body = `<h3>🤖 ${p('kimi')}</h3><p class="help">${p('kimiHelp')}</p>
+    body = `<h3>🔌 Conexión de este dispositivo</h3>
+      <div id="conn-state" class="help">Revisando…</div>
+      <p class="help">Si dice "No conectado", pega aquí el link privado de configuración (el que empieza con https://lothra2.github.io/...#setup=) y toca Conectar.</p>
+      <textarea id="conn-link" class="pix-input" placeholder="Pega aquí el link privado"></textarea>
+      <button id="conn-go" class="pix-btn green">Conectar este dispositivo</button>
+      <h3>🤖 ${p('kimi')}</h3><p class="help">${p('kimiHelp')}</p>
       <input id="pk-key" class="pix-input" type="password" placeholder="sk-..." value="${esc(s.kimi.key)}">
       <label>${p('model')}</label><input id="pk-model" class="pix-input" value="${esc(s.kimi.model)}" placeholder="auto">
       <button id="pk-test" class="pix-btn green">${p('test')}</button><div id="pk-res" class="help">${s.kimi.key ? `${s.kimi.base}` : ''}</div>
@@ -921,6 +986,12 @@ function bindPanel() {
   });
   on('#pe-save', () => { update((s) => r.querySelectorAll('[data-elfname]').forEach((i) => (s.elves[i.dataset.elfname] = i.value.trim()))); toast(p('saved')); });
   on('#pe-rebapt', () => { update((s) => { s.elves = { scarf: '', stripe: '', green: '' }; s.named = false; }); toast(p('saved')); go('phone'); });
+  if (r.querySelector('#conn-state')) checkConnection(r.querySelector('#conn-state'));
+  on('#conn-go', async () => {
+    const ok = (() => { try { return applySetupText($('#conn-link').value); } catch (e) { return false; } })();
+    if (!ok) { toast('❌ Ese no parece el link privado'); return; }
+    A.unlock(); toast('🎅 ¡Conectado!'); renderPanel();
+  });
   on('#pf-save', () => { update((s) => (s.profile = $('#pf-text').value.trim())); toast(p('saved')); });
   on('#pw-save', () => { const v = $('#pw-text').value.trim(); if (!v) return; update((s) => s.wishes.push({ id: uid(), date: today(), kid: parentWho, text: v, from: 'parents' })); toast(p('saved')); renderPanel(); });
   on('#vs-test', async () => {
@@ -942,6 +1013,13 @@ function bindPanel() {
   const imp = r.querySelector('#pb-imp'); if (imp) imp.onchange = async () => { try { importData(await imp.files[0].text()); toast(p('saved')); applyTexts(); renderPanel(); } catch (e) { toast('❌'); } };
   on('#pp-pin', () => { update((s) => (s.pin = null)); pinBuf = ''; renderPin(); });
   on('#pr-reset', () => { if (confirm(p('resetQ'))) { resetAll(); applyTexts(); renderPanel(); } });
+}
+async function checkConnection(el) {
+  if (!S().voiceServer.url) { el.innerHTML = '<b class="err">❌ No conectado.</b> Los elfos usan respuestas de respaldo y Santa no puede hablar con voz nueva.'; return; }
+  const st = await serverStatus();
+  if (!st || st.error) { el.innerHTML = `<b class="err">❌ No se pudo hablar con el Worker</b> (${esc(st && st.error || 'sin respuesta')}). Revisen el internet o el link privado.`; return; }
+  const kimi = st.kimi && !st.kimi.error;
+  el.innerHTML = `<b class="${kimi && st.fish ? 'ok' : 'err'}">${kimi && st.fish ? '✅ Conectado' : '⚠️ Conectado a medias'}</b> · Kimi ${kimi ? '✅' : '❌'} · Voces de Fish ${st.fish ? '✅' : '❌'} · Oído mágico ${st.asr ? '✅' : '❌ (actualicen el Worker a la versión 6)'}`;
 }
 $('#btn-parents').addEventListener('click', () => { A.sfx.tap(); go('parents'); });
 $('#btn-parents-phone').addEventListener('click', (e) => { e.stopPropagation(); cancelAnimationFrame(phoneRAF); go('parents'); });
@@ -967,14 +1045,32 @@ paintIcons();
 initSky($('#sky'));
 A.loadRecorded();
 // Link privado de papás: #setup=<base64> trae el perfil, los deseos y el servidor de voces
+function decodeSetup(code) {
+  const json = decodeURIComponent(escape(atob(code.replace(/-/g, '+').replace(/_/g, '/'))));
+  return JSON.parse(json);
+}
+// Aplica el link privado. El #setup se deja en la dirección para que, si se agrega a la pantalla de inicio
+// desde esa página, la app instalada también quede conectada. Solo se aplica una vez por link.
 function readSetup() {
   const m = location.hash.match(/setup=([A-Za-z0-9_-]+)/);
   if (!m) return;
+  const sig = m[1].length + ':' + m[1].slice(-24);
+  if (S().setupSig === sig && S().voiceServer.url) return;
   try {
-    const json = decodeURIComponent(escape(atob(m[1].replace(/-/g, '+').replace(/_/g, '/'))));
-    if (applySetup(JSON.parse(json))) setTimeout(() => toast(lang() === 'es' ? '🎅 ¡Santa ya conoce a la familia!' : '🎅 Santa knows the family now!', 4000), 600);
+    if (applySetup(decodeSetup(m[1]))) {
+      update((s) => (s.setupSig = sig));
+      A.setVoiceServer(S().voiceServer);
+      setTimeout(() => toast('🎅 ¡Santa ya conoce a la familia! Kimi y las voces están conectados.', 4500), 600);
+    }
   } catch (e) { console.warn('setup', e); }
-  history.replaceState(null, '', location.pathname + location.search);
+}
+// Pegar el link privado desde el panel de papás (para la app instalada en la pantalla de inicio)
+function applySetupText(txt) {
+  const m = String(txt).match(/setup=([A-Za-z0-9_-]+)/) || String(txt).trim().match(/^([A-Za-z0-9_-]{40,})$/);
+  if (!m) return false;
+  const ok = applySetup(decodeSetup(m[1]));
+  if (ok) { A.setVoiceServer(S().voiceServer); update((s) => (s.setupSig = m[1].length + ':' + m[1].slice(-24))); }
+  return ok;
 }
 readSetup();
 addEventListener('hashchange', readSetup);

@@ -42,7 +42,6 @@ export function unlock() {
   }
   if (ctx.state !== 'running') ctx.resume().catch(() => {});
   // iOS: hablar algo vacío desbloquea la voz
-  try { if (window.speechSynthesis && !unlock.spoke) { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); unlock.spoke = true; } } catch (e) {}
 }
 
 export function setMuted(m) {
@@ -420,19 +419,13 @@ export function speak(text, { who = 'narrator', lang = 'es', file = null, onStar
       return;
     }
     viaSynth();
+    // Nunca usamos la voz robótica del navegador: si no hay voz de Fish, el personaje "habla" con soniditos
     function viaSynth() {
-      if (!window.speechSynthesis) { onStart && onStart(); setTimeout(finish, 1500); return; }
-      const v = VOICE[who] || VOICE.narrator;
-      const u = new SpeechSynthesisUtterance(clean);
-      const voice = pickVoice(lang, v.prefer);
-      if (voice) u.voice = voice;
-      u.lang = voice ? voice.lang : lang === 'es' ? 'es-ES' : 'en-US';
-      u.pitch = v.pitch; u.rate = v.rate; u.volume = 1;
-      u.onstart = () => { onStart && onStart(); tick = setInterval(() => onTick && onTick(), 110); };
-      u.onend = finish; u.onerror = finish;
-      // Seguro por si el navegador nunca avisa el final
-      setTimeout(() => { if (speaking === me) finish(); }, 4000 + clean.length * 120);
-      speechSynthesis.speak(u);
+      onStart && onStart();
+      const pitch = (VOICE[who] || VOICE.narrator).blip;
+      let k = 0;
+      tick = setInterval(() => { onTick && onTick(); if (k++ % 2 === 0) sfx.blip(pitch); }, 110);
+      setTimeout(finish, Math.min(9000, 500 + clean.length * 55));
     }
   });
 }
