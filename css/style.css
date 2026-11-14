@@ -396,3 +396,11 @@ select.pix-input { appearance: none; -webkit-appearance: none; }
 .gate-pad button.del { background: #e6d6b0; }
 .gate-start { align-self: center; animation: pulse 1.2s steps(2) infinite; }
 @media (max-height: 720px) { .gate-pad button { height: 48px; } .gate-slots i { width: 50px; height: 54px; } #scr-gate .title { display: none; } }
+
+/* Modo llamada */
+.call-status {
+  flex-shrink: 0; padding: 10px 14px; text-align: center; font-size: clamp(17px, 4.6vw, 20px); font-weight: 700; color: #fff;
+  background: var(--red); clip-path: var(--corner); box-shadow: inset -4px -4px 0 var(--red2); animation: popin .2s steps(3);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.mic-btn.call { outline: 4px solid var(--green); outline-offset: -4px; }

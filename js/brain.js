@@ -18,7 +18,7 @@ export async function serverStatus() {
   } catch (e) { return { error: e.message }; }
 }
 
-async function call(messages, { maxTokens = 220, temperature = 0.7, timeout = 25000 } = {}) {
+async function call(messages, { maxTokens = 220, temperature = 0.7, timeout = 40000 } = {}) {
   const k = S().kimi;
   const ctl = new AbortController();
   const tm = setTimeout(() => ctl.abort(), timeout);

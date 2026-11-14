@@ -290,16 +290,23 @@ function askName(actor) {
 /* ================== Reconocimiento de voz ================== */
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 let rec = null;
-function listen(btn, onText) {
-  if (!SR) { toast(lang() === 'es' ? 'Este dispositivo no tiene micrófono mágico. ¡Escribe!' : 'No magic microphone here. Please type!'); return; }
+// Escucha una frase. onText(texto) si dijeron algo, onEnd(seEscuchoAlgo, error) al terminar.
+function listen(btn, onText, onEnd) {
+  if (!SR) { toast('Este dispositivo no tiene micrófono mágico. ¡Escribe o usa los botones!'); onEnd && onEnd(false, 'no-sr'); return; }
   if (rec) { rec.stop(); return; }
   A.stopVoice(); A.duck(true);
-  rec = new SR(); rec.lang = lang() === 'es' ? 'es-ES' : 'en-US'; rec.interimResults = false; rec.maxAlternatives = 1;
+  try { if (navigator.audioSession) navigator.audioSession.type = 'play-and-record'; } catch (e) {}
+  rec = new SR(); rec.lang = 'es-ES'; rec.interimResults = false; rec.maxAlternatives = 1;
   btn.classList.add('on'); A.sfx.pop();
-  rec.onresult = (e) => { const text = e.results[0][0].transcript; if (text) onText(text); };
-  rec.onerror = () => {};
-  rec.onend = () => { btn.classList.remove('on'); rec = null; A.duck(false); };
-  try { rec.start(); } catch (e) { btn.classList.remove('on'); rec = null; }
+  let heard = false, err = null;
+  rec.onresult = (e) => { const text = e.results[0][0].transcript; if (text) { heard = true; onText(text); } };
+  rec.onerror = (e) => { err = e.error; if (e.error === 'not-allowed' || e.error === 'service-not-allowed') toast('Hay que darle permiso al micrófono en Safari 🎙️'); };
+  rec.onend = () => {
+    btn.classList.remove('on'); rec = null; A.duck(false);
+    try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) {}
+    onEnd && onEnd(heard, err);
+  };
+  try { rec.start(); } catch (e) { btn.classList.remove('on'); rec = null; onEnd && onEnd(false, 'start'); }
 }
 
 /* ================== 4. Taller ================== */
@@ -422,7 +429,7 @@ function startChatStage() {
     requestAnimationFrame(frame);
   };
   requestAnimationFrame(frame);
-  leaveHooks.chat = () => { chatAlive = false; if (rec) rec.stop(); rememberChat(); };
+  leaveHooks.chat = () => { chatAlive = false; stopCall(); rememberChat(); };
 }
 // Recuerdos que salen de lo que contaron las niñas
 function newKidMsgs() {
@@ -502,11 +509,41 @@ async function sendChat(text) {
   else chatActor.do(Math.random() < 0.5 ? 'hop' : 'wave');
   if (current === 'chat') await elfSays(res.text || t('lineBusy'));
   if (pendingKidMsgs() >= 6) rememberChat();
+  if (callMode && current === 'chat') setTimeout(callListen, 250);
   chatBusy = false;
 }
 $('#chat-send').addEventListener('click', () => sendChat($('#chat-text').value));
 $('#chat-text').addEventListener('keydown', (e) => { if (e.key === 'Enter') sendChat($('#chat-text').value); });
-$('#chat-mic').addEventListener('click', () => { if (chatBusy) return; listen($('#chat-mic'), (txt) => sendChat(txt)); });
+// Modo llamada: tocan el micrófono una vez y conversan seguido, como por teléfono
+let callMode = false, callQuiet = 0;
+function setCallStatus(on, msg) {
+  const el = $('#call-status');
+  el.classList.toggle('hidden', !on); if (msg) el.textContent = msg;
+}
+function callListen() {
+  if (!callMode || chatBusy || current !== 'chat') return;
+  setCallStatus(true, '🎙️ ¡Te escucho! Habla ahora…');
+  listen($('#chat-mic'), (txt) => { callQuiet = 0; setCallStatus(true, '✨ ' + txt); sendChat(txt); }, (heard, err) => {
+    if (!callMode) return;
+    if (heard) return; // sendChat se encarga de volver a escuchar
+    if (err === 'not-allowed' || err === 'service-not-allowed' || err === 'no-sr' || err === 'start') { stopCall(); return; }
+    callQuiet++;
+    if (callQuiet >= 2) { stopCall('📞 Toca el micrófono para seguir hablando'); return; }
+    setTimeout(callListen, 300);
+  });
+}
+function stopCall(msg) {
+  callMode = false; callQuiet = 0; if (rec) rec.stop();
+  $('#chat-mic').classList.remove('call');
+  if (msg) { setCallStatus(true, msg); setTimeout(() => { if (!callMode) setCallStatus(false); }, 4000); } else setCallStatus(false);
+}
+$('#chat-mic').addEventListener('click', () => {
+  A.unlock();
+  if (callMode) { stopCall('📞 Llamada en pausa. Toca el micrófono para seguir.'); return; }
+  callMode = true; callQuiet = 0; $('#chat-mic').classList.add('call');
+  if (chatBusy) { setCallStatus(true, '⏳ Espera que el elfo termine…'); return; }
+  callListen();
+});
 
 /* ================== 6. Calendario ================== */
 ENTER.cal = () => {
