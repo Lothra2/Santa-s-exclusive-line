@@ -36,8 +36,31 @@ Cada dispositivo guarda sus propios datos. Para tener lo mismo en el iPad y en e
 ## Voces
 
 - Las frases fijas tienen voces grabadas con Fish Audio en la carpeta `audio/`: llamada, saludos, bautizo, calendario, días especiales y "jo, jo, jo". Cada archivo se llama por un hash de voz y texto, y `audio/manifest.json` los lista.
-- Lo que cambia en cada conversación, como el chat con Kimi o las cartas de Santa, usa la voz del navegador con tono de elfo o de Santa.
+- Lo que cambia en cada conversación, como el chat con Kimi o las cartas de Santa, usa las voces de Fish si el puente de Netlify está configurado. Si no, usa la voz del navegador con tono de elfo o de Santa.
+- El sonido siempre arranca encendido, también con el interruptor de silencio del iPhone o iPad activado.
 - Si cambian un texto fijo, ese texto pasa a la voz del navegador hasta que se vuelva a grabar.
+
+## Lo que Santa sabe de la familia (privado)
+
+El repositorio es público, así que los datos de la familia **no van en el código**. Viven solo en cada dispositivo:
+
+- **Link privado de configuración** (`...#setup=...`): se abre una vez en cada dispositivo y carga el perfil de la familia y los deseos de Navidad. No se comparte.
+- **Ajustes → Lo que Santa sabe de la familia**: se puede editar cuando quieran.
+- **Deseos y recuerdos**: los deseos que ustedes agregan, los que piden en el chat y los recuerdos que salen solos de las conversaciones. Santa y los elfos los usan para que la conversación crezca día a día.
+
+## Voces de Fish Audio en conversaciones nuevas (Netlify)
+
+Fish Audio no acepta llamadas desde el navegador, así que hace falta un puente pequeño. Ya está en `netlify/functions/tts.mjs`.
+
+1. En Netlify: **Add new site → Import an existing project → GitHub** y escojan este repositorio. Netlify lee `netlify.toml` solo, sin comando de build.
+2. En **Site configuration → Environment variables** agreguen:
+   - `FISH_API_KEY`: la key de Fish Audio.
+   - `ACCESS_TOKEN`: la clave del servidor, la misma que va en el panel.
+3. Hagan **Deploys → Trigger deploy** para que tome las variables.
+4. La dirección queda así: `https://<su-sitio>.netlify.app/.netlify/functions/tts`.
+5. En la página: **Papás → Ajustes → Voces de Fish Audio**, peguen la dirección y la clave, y toquen **Probar y guardar**. Santa habla para confirmar.
+
+La función solo acepta pedidos desde `lothra2.github.io` y con la clave correcta, así nadie más gasta sus créditos de Fish.
 
 ## Publicar en GitHub Pages
 

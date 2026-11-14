@@ -13,7 +13,25 @@ function freq(n) {
 const midiOf = (n) => { const m = n.match(/^([A-G][#b]?)(\d)$/); return (+m[2] + 1) * 12 + NOTE[m[1]]; };
 const mtof = (m) => 440 * Math.pow(2, (m - 69) / 12);
 
+// Truco para iPhone/iPad: con el interruptor de silencio activado, Web Audio se calla.
+// Un <audio> en bucle con silencio + audioSession 'playback' hace que siempre suene.
+let keepAlive = null;
+function silentWavURL() {
+  const sr = 8000, n = sr / 2, buf = new ArrayBuffer(44 + n * 2), v = new DataView(buf);
+  const w = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+  w(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); w(8, 'WAVE'); w(12, 'fmt '); v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, sr, true); v.setUint32(28, sr * 2, true);
+  v.setUint16(32, 2, true); v.setUint16(34, 16, true); w(36, 'data'); v.setUint32(40, n * 2, true);
+  return URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
+}
 export function unlock() {
+  try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) {}
+  if (!keepAlive) {
+    try {
+      keepAlive = new Audio(silentWavURL()); keepAlive.loop = true; keepAlive.volume = 0.01;
+      keepAlive.setAttribute('playsinline', ''); keepAlive.play().catch(() => { keepAlive = null; });
+    } catch (e) { keepAlive = null; }
+  } else if (keepAlive.paused) keepAlive.play().catch(() => {});
   if (!ctx) {
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return;
@@ -22,7 +40,7 @@ export function unlock() {
     musicBus = ctx.createGain(); musicBus.gain.value = 0.55; musicBus.connect(master);
     sfxBus = ctx.createGain(); sfxBus.gain.value = 0.9; sfxBus.connect(master);
   }
-  if (ctx.state === 'suspended') ctx.resume();
+  if (ctx.state !== 'running') ctx.resume().catch(() => {});
   // iOS: hablar algo vacío desbloquea la voz
   try { if (window.speechSynthesis && !unlock.spoke) { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); unlock.spoke = true; } } catch (e) {}
 }
@@ -163,7 +181,10 @@ function scheduleSong(song, t0, bus) {
   return total * spb;
 }
 
+let lastSong = null;
+export function resumeMusic() { if (lastSong && !current) { const { name, opts } = lastSong; playSong(name, opts); } }
 export function playSong(name, { loop = true, vol = 1 } = {}) {
+  if (loop) lastSong = { name, opts: { loop, vol } };
   if (!ctx) return;
   if (current && current.name === name) return;
   stopSong();
@@ -305,6 +326,36 @@ async function getBuf(hash) {
   p.catch(() => bufCache.delete(hash));
   return p;
 }
+let server = { url: '', token: '' };
+export function setVoiceServer(cfg) { server = { url: (cfg && cfg.url) || '', token: (cfg && cfg.token) || '' }; }
+export const hasVoiceServer = () => !!server.url;
+const FISH_WHO = new Set(['santa', 'scarf', 'stripe', 'green']);
+function serverBuf(hash, who, lang, text) {
+  if (bufCache.has(hash)) return bufCache.get(hash);
+  const p = fetch(server.url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-token': server.token }, body: JSON.stringify({ text, voice: `${who}_${lang}` }) })
+    .then((r) => { if (!r.ok) throw new Error('tts ' + r.status); return r.arrayBuffer(); })
+    .then((ab) => new Promise((res, rej) => ctx.decodeAudioData(ab, res, rej)));
+  bufCache.set(hash, p);
+  if (bufCache.size > 60) bufCache.delete(bufCache.keys().next().value);
+  p.catch(() => bufCache.delete(hash));
+  return p;
+}
+const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))]);
+function sourceFor(who, lang, clean, hash) {
+  if (!ctx) return null;
+  if (bufCache.has(hash)) return bufCache.get(hash);
+  if (recorded.has(hash)) return getBuf(hash);
+  if (server.url && FISH_WHO.has(who) && clean.length <= 1200) return serverBuf(hash, who, lang, clean);
+  return null;
+}
+// Prepara la voz antes de mostrar el texto, para que salgan juntos. Devuelve true si quedó lista.
+export async function prepareVoice(who, lang, text, ms = 12000) {
+  if (muted) return false;
+  const clean = cleanText(text); const hash = voiceHash(who, lang, clean);
+  const src = sourceFor(who, lang, clean, hash);
+  if (!src) return false;
+  try { await withTimeout(src, ms); return true; } catch (e) { return false; }
+}
 export function preloadVoice(who, lang, text) {
   if (!ctx) return; const h = voiceHash(who, lang, text); if (recorded.has(h)) getBuf(h).catch(() => {});
 }
@@ -348,8 +399,9 @@ export function speak(text, { who = 'narrator', lang = 'es', file = null, onStar
       return;
     }
     duck(true);
-    if (ctx && recorded.has(hash)) {
-      getBuf(hash).then((buf) => {
+    const src = sourceFor(who, lang, clean, hash);
+    if (src) {
+      withTimeout(src, 15000).then((buf) => {
         if (speaking !== me) return;
         const src = ctx.createBufferSource(); src.buffer = buf;
         src.playbackRate.value = RATE[`${who}_${lang}`] || 1;

@@ -31,6 +31,10 @@ function fresh() {
     days: {}, // 'YYYY-MM-DD': {opened, hint, msg}
     chats: { sophie: [], alana: [], both: [] },
     seen: { sophie: 0, alana: 0, both: 0 },
+    profile: '', // lo que Santa sabe de la familia (solo en este dispositivo)
+    memories: [], // {id, date, kid, text} recuerdos que salen de las conversaciones
+    memCursor: { sophie: 0, alana: 0, both: 0 },
+    voiceServer: { url: '', token: '' }, // puente de voces Fish Audio (Netlify)
   };
 }
 
@@ -42,6 +46,8 @@ export function load() {
   } catch (e) { state = fresh(); }
   // Si la fecha de lanzamiento quedó después de hoy (reloj cambiado), la corregimos
   if (state.launch > today()) state.launch = today();
+  // El sonido siempre arranca encendido
+  state.muted = false; state.voice = true;
   return state;
 }
 export function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
@@ -60,7 +66,22 @@ export function importData(txt) {
   state = Object.assign(fresh(), data, { kimi: data.kimi && data.kimi.key ? data.kimi : keep });
   save();
 }
-export function resetAll() { const k = state.kimi, pin = state.pin; state = fresh(); state.kimi = k; state.pin = pin; save(); }
+// Configuración privada que llega por el link de papás (#setup=...). Nunca vive en el código.
+export function applySetup(obj) {
+  if (!obj || typeof obj !== 'object') return false;
+  if (typeof obj.profile === 'string') state.profile = obj.profile;
+  if (Array.isArray(obj.wishes)) for (const w of obj.wishes) {
+    if (!w || !w.text || !w.kid) continue;
+    const exists = state.wishes.some((x) => x.kid === w.kid && x.text.toLowerCase() === String(w.text).toLowerCase());
+    if (!exists) state.wishes.push({ id: uid(), date: today(), kid: w.kid, text: String(w.text), from: 'parents' });
+  }
+  if (obj.voiceServer && obj.voiceServer.url) state.voiceServer = { url: obj.voiceServer.url, token: obj.voiceServer.token || '' };
+  if (obj.kimi && obj.kimi.key) state.kimi = { base: 'https://api.moonshot.ai/v1', model: '', ...obj.kimi };
+  save();
+  return true;
+}
+
+export function resetAll() { const { kimi, pin, profile, voiceServer } = state; state = fresh(); Object.assign(state, { kimi, pin, profile, voiceServer }); save(); }
 
 export const uid = () => Math.random().toString(36).slice(2, 9);
 

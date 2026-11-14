@@ -1,4 +1,4 @@
-import { load, S, update, save, KIDS, today, daysLeft, christmas, calendarDays, starsOf, uid, parseDay, addDays, exportData, importData, resetAll } from './store.js';
+import { load, S, update, save, KIDS, today, daysLeft, christmas, calendarDays, starsOf, uid, parseDay, addDays, exportData, importData, resetAll, applySetup } from './store.js';
 import { t, lang, elfName, ELF_INFO } from './i18n.js';
 import * as A from './audio.js';
 import { initSky, trigger as skyFx, confettiBurst } from './sky.js';
@@ -7,7 +7,7 @@ import { ElfActor, SantaActor } from './actors.js';
 import { elf, phone, icon, bigIcon, gift, smallStar, ELF_IDS } from './sprites.js';
 import { toURL } from './pix.js';
 import { dayContent, TAP_LINES } from './content.js';
-import { elfReply, elfGreeting, santaMessage, hasKimi, testKimi } from './brain.js';
+import { elfReply, elfGreeting, santaMessage, hasKimi, testKimi, extractMemories } from './brain.js';
 
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
@@ -423,7 +423,29 @@ function startChatStage() {
     requestAnimationFrame(frame);
   };
   requestAnimationFrame(frame);
-  leaveHooks.chat = () => { chatAlive = false; if (rec) rec.stop(); };
+  leaveHooks.chat = () => { chatAlive = false; if (rec) rec.stop(); rememberChat(); };
+}
+// Recuerdos que salen de lo que contaron las niñas
+function newKidMsgs() {
+  const kid = S().kid; const since = (S().memCursor || {})[kid] || 0;
+  return (S().chats[kid] || []).filter((m) => m.from === 'kid' && (m.ts || 0) > since);
+}
+const pendingKidMsgs = () => newKidMsgs().length;
+let remembering = false;
+async function rememberChat() {
+  if (remembering || !hasKimi()) return;
+  const kid = S().kid; const msgs = newKidMsgs();
+  if (msgs.length < 2) return;
+  remembering = true;
+  const until = Math.max(...msgs.map((m) => m.ts || 0));
+  try {
+    const facts = await extractMemories(kid, msgs.map((m) => m.text));
+    update((s) => {
+      s.memCursor = s.memCursor || {}; s.memCursor[kid] = until;
+      for (const f of facts) s.memories.push({ id: uid(), date: today(), kid, text: f });
+      if (s.memories.length > 80) s.memories.splice(0, s.memories.length - 80);
+    });
+  } finally { remembering = false; }
 }
 function chatHistory() { return (S().chats[S().kid] || []).filter((m) => m.elf === chatElf); }
 function renderLog() {
@@ -456,6 +478,7 @@ async function greetIfNeeded() {
   if (greeted.has(key)) return;
   greeted.add(key); chatBusy = true; typing(true);
   const [text] = await Promise.all([elfGreeting(chatElf, S().kid, lang()), sleep(700)]);
+  await A.prepareVoice(chatElf, lang(), text, 9000);
   typing(false);
   if (current === 'chat') await elfSays(text);
   chatBusy = false;
@@ -470,6 +493,7 @@ async function sendChat(text) {
   A.sfx.pop();
   typing(true); chatActor.do('look');
   const [res] = await Promise.all([elfReply(chatElf, S().kid, chatHistory(), lang()), sleep(600)]);
+  if (res.text) await A.prepareVoice(chatElf, lang(), res.text, 9000);
   typing(false);
   if (res.wish) {
     update((s) => s.wishes.push({ id: uid(), date: today(), kid: s.kid, text: res.wish }));
@@ -478,6 +502,7 @@ async function sendChat(text) {
   } else if (/(porté bien|fui buena|good today|was good)/i.test(text)) { chatActor.do('cheer'); chatActor.heart(); }
   else chatActor.do(Math.random() < 0.5 ? 'hop' : 'wave');
   if (current === 'chat') await elfSays(res.text || t('lineBusy'));
+  if (pendingKidMsgs() >= 6) rememberChat();
   chatBusy = false;
 }
 $('#chat-send').addEventListener('click', () => sendChat($('#chat-text').value));
@@ -614,9 +639,21 @@ ENTER.santa = async () => {
   santaActor.do('wave');
   santaText = await msgP;
   if (!santaAlive) return;
+  await santaBusy(A.prepareVoice('santa', lang(), santaText, 20000));
+  if (!santaAlive) return;
   santaActor.arms = 'letter';
   await readSanta();
 };
+// Santa se mantiene animado mientras prepara su voz
+async function santaBusy(promise) {
+  let done = false; promise.finally(() => (done = true));
+  const acts = ['wave', 'laugh', 'wink', 'wave'];
+  for (let i = 0; !done && santaAlive; i++) {
+    santaActor.do(acts[i % acts.length]); if (acts[i % acts.length] === 'laugh') A.sfx.jingle();
+    await Promise.race([promise, sleep(1900)]);
+  }
+  return promise;
+}
 async function readSanta() {
   $('#santa-letter').classList.remove('hidden'); $('#santa-actions').classList.add('hidden');
   const el = $('#santa-text');
@@ -629,7 +666,9 @@ $('#santa-again').addEventListener('click', () => { A.sfx.tap(); santaActor.arms
 $('#santa-new').addEventListener('click', async () => {
   A.sfx.tap(); $('#santa-actions').classList.add('hidden'); $('#santa-text').textContent = '…';
   santaActor.do('laugh'); A.sfx.hoho();
-  santaText = await santaMessage(S().kid, lang()); santaActor.arms = 'letter'; readSanta();
+  santaText = await santaMessage(S().kid, lang());
+  await santaBusy(A.prepareVoice('santa', lang(), santaText, 20000));
+  santaActor.arms = 'letter'; readSanta();
 });
 function santaRoom(W, H) {
   const c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d');
@@ -709,8 +748,8 @@ function renderPin(msg = '') {
   });
 }
 const P = {
-  es: { today: 'Hoy', cal: 'Calendario', wishes: 'Deseos', settings: 'Ajustes', who: '¿De quién?', diary: '¿Qué pasó hoy?', diaryHelp: 'Escríbanlo en tercera persona. Los elfos lo van a mencionar como si lo hubieran visto con su magia. Ej: "ayudó a Alana a recoger los juguetes".', saveDiary: 'Guardar en el diario', star: 'Dar una estrella ⭐', reason: '¿Por qué se la ganó?', reasonPh: 'ayudó a recoger la mesa', reward: 'Premio (opcional)', rewardPh: 'helado el sábado', recent: 'Últimos registros', day: 'Día', hint: 'Pista de algo escondido (opcional)', hintPh: 'Busca debajo del cojín azul', msg: 'Mensaje especial para ese día (opcional)', msgPh: 'Hoy vamos a decorar galletas', saveDay: 'Guardar el día', noWishes: 'Todavía no han pedido nada en el chat.', kimi: 'Kimi (conversaciones inteligentes)', kimiHelp: 'Pega tu API key de Kimi. Se guarda solo en este dispositivo y nunca sale de aquí, salvo para hablar con Kimi. Sin key, los elfos usan respuestas mágicas ya escritas.', test: 'Probar y guardar', model: 'Modelo', elves: 'Nombres de los elfos', rebapt: 'Repetir el bautizo', launch: 'Primer día del calendario', voice: 'Voz de los elfos y Santa', on: 'Sí', off: 'No', backup: 'Pasar datos a otro dispositivo', exp: 'Descargar respaldo', imp: 'Cargar respaldo', backupHelp: 'Cada dispositivo guarda sus propios datos. Descarga el respaldo aquí y cárgalo en el otro iPad o teléfono para que tengan lo mismo. La key de Kimi no viaja en el respaldo.', changePin: 'Cambiar PIN', reset: 'Borrar todo y empezar de nuevo', resetQ: '¿Seguro? Se borran diario, estrellas, nombres y calendario.', saved: '¡Guardado!', close: 'Cerrar panel', testing: 'Probando…', okKimi: (m) => `¡Conectado! Modelo: ${m}`, badKimi: (e) => `No funcionó (${e}). Revisa la key.`, del: 'Borrar' },
-  en: { today: 'Today', cal: 'Calendar', wishes: 'Wishes', settings: 'Settings', who: 'Who?', diary: 'What happened today?', diaryHelp: 'Write it in third person. The elves will mention it as if they saw it with their magic. E.g. "helped Alana tidy up the toys".', saveDiary: 'Save to diary', star: 'Give a star ⭐', reason: 'Why did she earn it?', reasonPh: 'helped clear the table', reward: 'Reward (optional)', rewardPh: 'ice cream on Saturday', recent: 'Recent entries', day: 'Day', hint: 'Clue for something hidden (optional)', hintPh: 'Look under the blue pillow', msg: 'Special message for that day (optional)', msgPh: "Today we're decorating cookies", saveDay: 'Save day', noWishes: 'No wishes in the chat yet.', kimi: 'Kimi (smart conversations)', kimiHelp: 'Paste your Kimi API key. It is stored only on this device and is only sent to Kimi. Without a key, the elves use pre-written magic replies.', test: 'Test and save', model: 'Model', elves: 'Elf names', rebapt: 'Redo the naming ceremony', launch: 'First calendar day', voice: 'Elf and Santa voices', on: 'On', off: 'Off', backup: 'Move data to another device', exp: 'Download backup', imp: 'Load backup', backupHelp: 'Each device keeps its own data. Download a backup here and load it on the other iPad or phone. The Kimi key is not included.', changePin: 'Change PIN', reset: 'Erase everything and start over', resetQ: 'Are you sure? Diary, stars, names and calendar will be erased.', saved: 'Saved!', close: 'Close panel', testing: 'Testing…', okKimi: (m) => `Connected! Model: ${m}`, badKimi: (e) => `Did not work (${e}). Check the key.`, del: 'Delete' },
+  es: { today: 'Hoy', cal: 'Calendario', wishes: 'Deseos y recuerdos', settings: 'Ajustes', who: '¿De quién?', diary: '¿Qué pasó hoy?', diaryHelp: 'Escríbanlo en tercera persona. Los elfos lo van a mencionar como si lo hubieran visto con su magia. Ej: "ayudó a Alana a recoger los juguetes".', saveDiary: 'Guardar en el diario', star: 'Dar una estrella ⭐', reason: '¿Por qué se la ganó?', reasonPh: 'ayudó a recoger la mesa', reward: 'Premio (opcional)', rewardPh: 'helado el sábado', recent: 'Últimos registros', day: 'Día', hint: 'Pista de algo escondido (opcional)', hintPh: 'Busca debajo del cojín azul', msg: 'Mensaje especial para ese día (opcional)', msgPh: 'Hoy vamos a decorar galletas', saveDay: 'Guardar el día', noWishes: 'Todavía no hay deseos.', wishHelp: 'Lo que Santa ya sabe que quieren. Los elfos lo mencionan con ilusión pero nunca lo prometen. Lo que pidan en el chat aparece aquí solo.', wishPh: 'una bicicleta', addWish: 'Agregar deseo 🎁', memTitle: 'Recuerdos de las conversaciones', memHelp: 'Cosas que las niñas les contaron a los elfos. Santa y los elfos las recuerdan después. Pueden borrar lo que quieran.', memNone: 'Todavía no hay recuerdos. Se crean solos cuando conversan con Kimi conectado.', profile: 'Lo que Santa sabe de la familia', profileHelp: 'Escriban aquí todo lo que quieran que Santa y los elfos sepan. Se guarda solo en este dispositivo, nunca en internet ni en el código.', vsTitle: 'Voces de Fish Audio para conversaciones nuevas', vsHelp: 'Pega la dirección de la función de Netlify y su clave. Con esto el chat y las cartas de Santa suenan con las voces de Fish. Sin esto usan la voz del dispositivo.', vsToken: 'Clave del servidor', kimi: 'Kimi (conversaciones inteligentes)', kimiHelp: 'Pega tu API key de Kimi. Se guarda solo en este dispositivo y nunca sale de aquí, salvo para hablar con Kimi. Sin key, los elfos usan respuestas mágicas ya escritas.', test: 'Probar y guardar', model: 'Modelo', elves: 'Nombres de los elfos', rebapt: 'Repetir el bautizo', launch: 'Primer día del calendario', voice: 'Voz de los elfos y Santa', on: 'Sí', off: 'No', backup: 'Pasar datos a otro dispositivo', exp: 'Descargar respaldo', imp: 'Cargar respaldo', backupHelp: 'Cada dispositivo guarda sus propios datos. Descarga el respaldo aquí y cárgalo en el otro iPad o teléfono para que tengan lo mismo. La key de Kimi no viaja en el respaldo.', changePin: 'Cambiar PIN', reset: 'Borrar todo y empezar de nuevo', resetQ: '¿Seguro? Se borran diario, estrellas, nombres y calendario.', saved: '¡Guardado!', close: 'Cerrar panel', testing: 'Probando…', okKimi: (m) => `¡Conectado! Modelo: ${m}`, badKimi: (e) => `No funcionó (${e}). Revisa la key.`, del: 'Borrar' },
+  en: { today: 'Today', cal: 'Calendar', wishes: 'Wishes & memories', settings: 'Settings', who: 'Who?', diary: 'What happened today?', diaryHelp: 'Write it in third person. The elves will mention it as if they saw it with their magic. E.g. "helped Alana tidy up the toys".', saveDiary: 'Save to diary', star: 'Give a star ⭐', reason: 'Why did she earn it?', reasonPh: 'helped clear the table', reward: 'Reward (optional)', rewardPh: 'ice cream on Saturday', recent: 'Recent entries', day: 'Day', hint: 'Clue for something hidden (optional)', hintPh: 'Look under the blue pillow', msg: 'Special message for that day (optional)', msgPh: "Today we're decorating cookies", saveDay: 'Save day', noWishes: 'No wishes yet.', wishHelp: 'What Santa already knows they want. The elves mention it with excitement but never promise it. Wishes from the chat show up here automatically.', wishPh: 'a bicycle', addWish: 'Add wish 🎁', memTitle: 'Memories from the chats', memHelp: 'Things the girls told the elves. Santa and the elves remember them later. You can delete anything.', memNone: 'No memories yet. They are created when they chat with Kimi connected.', profile: 'What Santa knows about the family', profileHelp: 'Write everything you want Santa and the elves to know. It is stored only on this device, never online or in the code.', vsTitle: 'Fish Audio voices for new conversations', vsHelp: 'Paste the Netlify function address and its key. Then the chat and Santa letters use the Fish voices. Without it they use the device voice.', vsToken: 'Server key', kimi: 'Kimi (smart conversations)', kimiHelp: 'Paste your Kimi API key. It is stored only on this device and is only sent to Kimi. Without a key, the elves use pre-written magic replies.', test: 'Test and save', model: 'Model', elves: 'Elf names', rebapt: 'Redo the naming ceremony', launch: 'First calendar day', voice: 'Elf and Santa voices', on: 'On', off: 'Off', backup: 'Move data to another device', exp: 'Download backup', imp: 'Load backup', backupHelp: 'Each device keeps its own data. Download a backup here and load it on the other iPad or phone. The Kimi key is not included.', changePin: 'Change PIN', reset: 'Erase everything and start over', resetQ: 'Are you sure? Diary, stars, names and calendar will be erased.', saved: 'Saved!', close: 'Close panel', testing: 'Testing…', okKimi: (m) => `Connected! Model: ${m}`, badKimi: (e) => `Did not work (${e}). Check the key.`, del: 'Delete' },
 };
 const p = (k, ...a) => { const v = P[lang()][k]; return typeof v === 'function' ? v(...a) : v; };
 function whoSeg(sel) {
@@ -741,7 +780,11 @@ function renderPanel() {
       <button id="pc-save" class="pix-btn green">${p('saveDay')}</button>
       ${withInfo.map(([d, v]) => `<div class="list-item"><div><b>${d}</b>${v.hint ? `<br>🔍 ${esc(v.hint)}` : ''}${v.msg ? `<br>💌 ${esc(v.msg)}` : ''}</div><button class="x" data-dayx="${d}">✕</button></div>`).join('')}`;
   } else if (parentsTab === 'wishes') {
-    body = s.wishes.length ? s.wishes.slice().reverse().map((w) => `<div class="list-item"><div>🎁 <b>${esc(w.text)}</b><br><small>${kidLabel(w.kid)} · ${w.date}</small></div><button class="x" data-del="w:${w.id}">✕</button></div>`).join('') : `<p class="help">${p('noWishes')}</p>`;
+    body = `<p class="help">${p('wishHelp')}</p><label>${p('who')}</label>${whoSeg(parentWho)}
+      <input id="pw-text" class="pix-input" placeholder="${p('wishPh')}"><button id="pw-save" class="pix-btn gold">${p('addWish')}</button>
+      ${s.wishes.length ? s.wishes.slice().reverse().map((w) => `<div class="list-item"><div>🎁 <b>${esc(w.text)}</b><br><small>${kidLabel(w.kid)} · ${w.date}${w.from === 'parents' ? ' · 👨‍👩‍👧' : ' · 💬'}</small></div><button class="x" data-del="w:${w.id}">✕</button></div>`).join('') : `<p class="help">${p('noWishes')}</p>`}
+      <h3>🧠 ${p('memTitle')}</h3><p class="help">${p('memHelp')}</p>
+      ${s.memories.length ? s.memories.slice().reverse().map((m) => `<div class="list-item"><div>${esc(m.text)}<br><small>${kidLabel(m.kid)} · ${m.date}</small></div><button class="x" data-del="m:${m.id}">✕</button></div>`).join('') : `<p class="help">${p('memNone')}</p>`}`;
   } else {
     body = `<h3>🤖 ${p('kimi')}</h3><p class="help">${p('kimiHelp')}</p>
       <input id="pk-key" class="pix-input" type="password" placeholder="sk-..." value="${esc(s.kimi.key)}">
@@ -750,8 +793,13 @@ function renderPanel() {
       <h3>🧝 ${p('elves')}</h3>
       ${ELF_IDS.map((id) => `<input class="pix-input" data-elfname="${id}" value="${esc(s.elves[id])}" placeholder="${esc(ELF_INFO[id][lang()].fallback)}">`).join('')}
       <div class="row"><button id="pe-save" class="pix-btn green">${p('saveDay').split(' ')[0]}</button><button id="pe-rebapt" class="pix-btn gray">${p('rebapt')}</button></div>
-      <h3>🔊 ${p('voice')}</h3>
-      <div class="seg"><button data-voice="1" class="${s.voice ? 'on' : ''}">${p('on')}</button><button data-voice="0" class="${!s.voice ? 'on' : ''}">${p('off')}</button></div>
+      <h3>👨‍👩‍👧 ${p('profile')}</h3><p class="help">${p('profileHelp')}</p>
+      <textarea id="pf-text" class="pix-input" style="height:190px">${esc(s.profile || '')}</textarea>
+      <button id="pf-save" class="pix-btn green">${p('saveDay').split(' ')[0]}</button>
+      <h3>🎙️ ${p('vsTitle')}</h3><p class="help">${p('vsHelp')}</p>
+      <input id="vs-url" class="pix-input" placeholder="https://....netlify.app/.netlify/functions/tts" value="${esc(s.voiceServer.url || '')}">
+      <input id="vs-token" class="pix-input" type="password" placeholder="${p('vsToken')}" value="${esc(s.voiceServer.token || '')}">
+      <button id="vs-test" class="pix-btn green">${p('test')}</button><div id="vs-res" class="help"></div>
       <h3>📅 ${p('launch')}</h3><input id="pl-date" type="date" class="pix-input" value="${s.launch}">
       <h3>📦 ${p('backup')}</h3><p class="help">${p('backupHelp')}</p>
       <div class="row"><button id="pb-exp" class="pix-btn green">${p('exp')}</button><label class="pix-btn gold" style="display:grid;place-items:center">${p('imp')}<input id="pb-imp" type="file" accept=".json,application/json" hidden></label></div>
@@ -775,7 +823,7 @@ function bindPanel() {
   });
   r.querySelectorAll('[data-del]').forEach((b) => b.onclick = () => {
     const [k, id] = b.dataset.del.split(':');
-    update((s) => { const key = k === 's' ? 'stars' : k === 'w' ? 'wishes' : 'diary'; s[key] = s[key].filter((x) => x.id !== id); });
+    update((s) => { const key = k === 's' ? 'stars' : k === 'w' ? 'wishes' : k === 'm' ? 'memories' : 'diary'; s[key] = s[key].filter((x) => x.id !== id); });
     renderPanel();
   });
   const daySel = r.querySelector('#pc-day');
@@ -799,7 +847,17 @@ function bindPanel() {
   });
   on('#pe-save', () => { update((s) => r.querySelectorAll('[data-elfname]').forEach((i) => (s.elves[i.dataset.elfname] = i.value.trim()))); toast(p('saved')); });
   on('#pe-rebapt', () => { update((s) => { s.elves = { scarf: '', stripe: '', green: '' }; s.named = false; }); toast(p('saved')); go('phone'); });
-  r.querySelectorAll('[data-voice]').forEach((b) => b.onclick = () => { update((s) => (s.voice = b.dataset.voice === '1')); renderPanel(); });
+  on('#pf-save', () => { update((s) => (s.profile = $('#pf-text').value.trim())); toast(p('saved')); });
+  on('#pw-save', () => { const v = $('#pw-text').value.trim(); if (!v) return; update((s) => s.wishes.push({ id: uid(), date: today(), kid: parentWho, text: v, from: 'parents' })); toast(p('saved')); renderPanel(); });
+  on('#vs-test', async () => {
+    const url = $('#vs-url').value.trim(), token = $('#vs-token').value.trim(), res = $('#vs-res');
+    update((s) => (s.voiceServer = { url, token })); A.setVoiceServer(S().voiceServer);
+    if (!url) { res.textContent = ''; return; }
+    A.unlock(); res.textContent = p('testing'); res.className = 'help';
+    const ok = await A.prepareVoice('santa', lang(), lang() === 'es' ? `¡Jo, jo, jo! Prueba de voz número ${Math.floor(Math.random() * 1000)}.` : `Ho, ho, ho! Voice test number ${Math.floor(Math.random() * 1000)}.`, 20000);
+    if (ok) { res.textContent = '✓ ' + p('saved'); res.className = 'ok'; A.speak(lang() === 'es' ? '¡Jo, jo, jo! ¡Ya tengo mi voz para hablar con ustedes!' : 'Ho, ho, ho! I have my voice to talk with you!', { who: 'santa', lang: lang() }); }
+    else { res.textContent = '❌'; res.className = 'err'; }
+  });
   const ld = r.querySelector('#pl-date'); if (ld) ld.onchange = () => { if (ld.value && ld.value <= today()) { update((s) => (s.launch = ld.value)); toast(p('saved')); } };
   on('#pb-exp', () => {
     const blob = new Blob([exportData()], { type: 'application/json' });
@@ -832,13 +890,28 @@ applyTexts();
 paintIcons();
 initSky($('#sky'));
 A.loadRecorded();
+// Link privado de papás: #setup=<base64> trae el perfil, los deseos y el servidor de voces
+function readSetup() {
+  const m = location.hash.match(/setup=([A-Za-z0-9_-]+)/);
+  if (!m) return;
+  try {
+    const json = decodeURIComponent(escape(atob(m[1].replace(/-/g, '+').replace(/_/g, '/'))));
+    if (applySetup(JSON.parse(json))) setTimeout(() => toast(lang() === 'es' ? '🎅 ¡Santa ya conoce a la familia!' : '🎅 Santa knows the family now!', 4000), 600);
+  } catch (e) { console.warn('setup', e); }
+  history.replaceState(null, '', location.pathname + location.search);
+}
+readSetup();
+addEventListener('hashchange', readSetup);
+A.setVoiceServer(S().voiceServer);
+// Cualquier toque reactiva el sonido (iPad lo pausa al volver de otra app)
+document.addEventListener('pointerdown', () => A.unlock(), { capture: true, passive: true });
 tickCountdown();
 // Al volver a la app después de un rato, se vuelve a "llamar"
 let hiddenAt = 0;
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) { hiddenAt = Date.now(); A.stopVoice(); A.stopSong(0.1); }
   else if (hiddenAt && Date.now() - hiddenAt > 10 * 60 * 1000 && current !== 'parents') { go('phone', { instant: true }); ENTER_PHONE(); }
-  else if (current === 'hub') A.playSong('jingle', { vol: 0.7 });
+  else { A.unlock(); A.resumeMusic(); }
 });
 ENTER.phone = ENTER_PHONE;
 // Para pruebas: ?go=hub
