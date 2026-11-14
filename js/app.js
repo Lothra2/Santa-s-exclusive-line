@@ -426,12 +426,16 @@ $$('.menu-btn').forEach((b) => b.addEventListener('click', () => { A.unlock(); A
 $('#btn-who').addEventListener('click', () => { A.sfx.tap(); go('who'); });
 
 // Reporte de estrellas nuevas que dieron los papás
+// Las estrellas que dan los papás quedan guardadas en secreto y salen como sorpresa
+// la PRÓXIMA vez que se abre la app (no en la misma visita en que se dieron).
+let sessionStart = Date.now();
 async function showReports() {
   const kid = S().kid;
   const seen = S().seen[kid] || 0;
-  const fresh = S().stars.filter((s) => s.ts > seen && (kid === 'both' || s.kid === kid || s.kid === 'both'));
+  const fresh = S().stars.filter((s) => s.ts > seen && s.ts < sessionStart && (kid === 'both' || s.kid === kid || s.kid === 'both'));
   if (!fresh.length) return false;
-  update((s) => (s.seen[kid] = Date.now()));
+  const shownUntil = Math.max(...fresh.map((s) => s.ts));
+  update((s) => (s.seen[kid] = Math.max(s.seen[kid] || 0, shownUntil)));
   for (const s of fresh) {
     if (current !== 'hub') return true;
     A.sfx.fanfare(); skyFx('stars');
@@ -896,6 +900,7 @@ const p = (k, ...a) => { const v = P[lang()][k]; return typeof v === 'function' 
 function whoSeg(sel) {
   return `<div class="seg" data-seg>${['sophie', 'alana', 'both'].map((k) => `<button data-who="${k}" class="${sel === k ? 'on' : ''}">${kidLabel(k)}</button>`).join('')}</div>`;
 }
+const starPending = (st) => ['sophie', 'alana'].some((k) => (st.kid === k || st.kid === 'both') && st.ts > (S().seen[k] || 0));
 function renderPanel() {
   const s = S();
   const tabs = `<div class="tabs">${['today', 'cal', 'wishes', 'settings'].map((k) => `<button data-tab="${k}" class="${parentsTab === k ? 'on' : ''}">${p(k)}</button>`).join('')}</div>`;
@@ -910,7 +915,7 @@ function renderPanel() {
       <label>${p('reward')}</label><input id="ps-reward" class="pix-input" placeholder="${p('rewardPh')}">
       <button id="ps-save" class="pix-btn gold">${p('star')}</button>
       <h3>${p('recent')}</h3>
-      ${recent.map((r) => `<div class="list-item"><div>${r.kind === 's' ? '⭐' : '📖'} ${esc(r.kind === 's' ? r.reason : r.text)}${r.reward ? ` · 🎁 ${esc(r.reward)}` : ''}<br><small>${kidLabel(r.kid)} · ${r.date}</small></div><button class="x" data-del="${r.kind}:${r.id}">✕</button></div>`).join('')}`;
+      ${recent.map((r) => `<div class="list-item"><div>${r.kind === 's' ? '⭐' : '📖'} ${esc(r.kind === 's' ? r.reason : r.text)}${r.reward ? ` · 🎁 ${esc(r.reward)}` : ''}<br><small>${kidLabel(r.kid)} · ${r.date}${r.kind === 's' && starPending(r) ? ' · ⏳ sorpresa pendiente' : ''}</small></div><button class="x" data-del="${r.kind}:${r.id}">✕</button></div>`).join('')}`;
   } else if (parentsTab === 'cal') {
     const days = calendarDays();
     const sel = parentsTab.day || today();
@@ -965,7 +970,7 @@ function bindPanel() {
   on('#ps-save', () => {
     const v = $('#ps-reason').value.trim(); if (!v) return;
     update((s) => s.stars.push({ id: uid(), date: today(), kid: parentWho, reason: v, reward: $('#ps-reward').value.trim(), ts: Date.now() }));
-    A.unlock(); A.sfx.fanfare(); toast('⭐ ' + p('saved')); renderPanel();
+    A.unlock(); A.sfx.fanfare(); toast('⭐ ¡Guardada en secreto! Saldrá como sorpresa la próxima vez que abran la app.', 5000); renderPanel();
   });
   r.querySelectorAll('[data-del]').forEach((b) => b.onclick = () => {
     const [k, id] = b.dataset.del.split(':');
@@ -1089,7 +1094,7 @@ tickCountdown();
 let hiddenAt = 0;
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) { hiddenAt = Date.now(); A.stopVoice(); A.stopSong(0.1); }
-  else if (hiddenAt && Date.now() - hiddenAt > 10 * 60 * 1000 && current !== 'parents') { go('gate', { instant: true }); }
+  else if (hiddenAt && Date.now() - hiddenAt > 10 * 60 * 1000 && current !== 'parents') { sessionStart = Date.now(); go('gate', { instant: true }); }
   else { A.unlock(); A.resumeMusic(); }
 });
 ENTER.phone = ENTER_PHONE;
