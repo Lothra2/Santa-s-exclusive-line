@@ -17,7 +17,7 @@ const cap = (s) => String(s).replace(/^./, (c) => c.toUpperCase());
 const kidNames = (k) => (k === 'both' ? (lang() === 'es' ? 'Sophie y Alana' : 'Sophie and Alana') : KIDS[k].name);
 const kidLabel = (k) => (k === 'both' ? t('both') : KIDS[k].name);
 
-load(); save();
+load(); S().lang = 'es'; save();
 A.setMuted(S().muted);
 document.documentElement.lang = lang();
 
@@ -67,7 +67,7 @@ async function go(name, opts = {}) {
   const doSwitch = async () => {
     $$('.screen').forEach((s) => s.classList.remove('active'));
     $(`#scr-${name}`).classList.add('active');
-    $('#topbar').classList.toggle('hidden', name === 'phone');
+    $('#topbar').classList.toggle('hidden', name === 'phone' || name === 'gate');
     $('#btn-back').style.visibility = ['hub', 'who', 'naming'].includes(name) ? 'hidden' : 'visible';
     current = name;
   };
@@ -176,7 +176,6 @@ async function callNorthPole() {
 }
 phoneCv.addEventListener('click', callNorthPole);
 $('#phone-msg').addEventListener('click', callNorthPole);
-ENTER_PHONE();
 function ENTER_PHONE() {
   phoneBusy = false; phoneLifted = 0;
   $('#phone-display').classList.add('hidden');
@@ -912,10 +911,119 @@ tickCountdown();
 let hiddenAt = 0;
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) { hiddenAt = Date.now(); A.stopVoice(); A.stopSong(0.1); }
-  else if (hiddenAt && Date.now() - hiddenAt > 10 * 60 * 1000 && current !== 'parents') { go('phone', { instant: true }); ENTER_PHONE(); }
+  else if (hiddenAt && Date.now() - hiddenAt > 10 * 60 * 1000 && current !== 'parents') { go('gate', { instant: true }); }
   else { A.unlock(); A.resumeMusic(); }
 });
 ENTER.phone = ENTER_PHONE;
+
+/* ================== 0. Clave mágica ==================
+   La clave es 1521: el 15 de diciembre (cumpleaños de Sophie) y el 21 (cumpleaños de Alana). */
+const GATE_CODE = '1521';
+const GATE = {
+  intro: '¡Jo, jo, jo! Hola, Sophie y Alana. La Línea Directa al Polo Norte está cerrada con un candado mágico. La clave tiene cuatro números, y es muy especial, porque abre los dos días más felices de su diciembre. ¿Cuáles serán?',
+  hints: [
+    'Primera pista: en diciembre hay dos días con torta, velitas y la canción de feliz cumpleaños.',
+    'Segunda pista: la clave son los días de sus cumpleaños. Primero el de Sophie, que es la hermana mayor, y después el de Alana.',
+    'Última pista: Sophie cumple el quince y Alana cumple el veintiuno. ¡Pónganlos juntitos, uno detrás del otro!',
+  ],
+  wrong: ['¡Uy, casi! Esa no es la clave mágica. ¡Inténtenlo otra vez!', '¡Jo, jo! El candado sigue cerrado. Piensen en sus cumpleaños.'],
+  right: '¡Jo, jo, jo! ¡Lo lograron! Esa es la clave mágica de sus cumpleaños. ¡Bienvenidas a la Línea Directa al Polo Norte!',
+};
+let gateBuf = '', gateHint = 0, gateWrong = 0, gateBusy = false, gateAlive = false, gateSanta = null, gateOpen = 0, gateStarted = false, gateShake = 0;
+function gateScene() {
+  const cv = $('#gate-cv'); const W = 192, H = 104;
+  const st = makeStage(cv, W, H);
+  gateSanta = new SantaActor(66, 106);
+  gateAlive = true; let last = performance.now(); const snow = Array.from({ length: 34 }, () => ({ x: Math.random() * W, y: Math.random() * H, v: 6 + Math.random() * 9 }));
+  const sparks = [];
+  const frame = (now) => {
+    if (!gateAlive) return;
+    const dt = Math.min(0.1, (now - last) / 1000); last = now; const t = now / 1000;
+    const g = st.b;
+    g.fillStyle = '#141a4e'; g.fillRect(0, 0, W, H);
+    g.fillStyle = 'rgba(90,240,170,0.18)'; for (let x = 0; x < W; x++) g.fillRect(x, Math.round(14 + Math.sin(x * 0.06 + t * 0.5) * 5), 1, 6);
+    g.fillStyle = '#fff6d6'; g.beginPath(); g.arc(24, 18, 7, 0, 7); g.fill();
+    g.fillStyle = '#e9efff'; g.fillRect(0, 94, W, 10); g.fillStyle = '#c4d0f0'; for (let x = 0; x < W; x += 7) g.fillRect(x, 96 + (x % 3), 3, 1);
+    gateSanta.update(dt); gateSanta.draw(g, 1);
+    // candado gigante
+    const ox = 150 + (gateShake > 0 ? (Math.floor(t * 40) % 2 ? 2 : -2) : 0), oy = 50 + Math.round(Math.sin(t * 2) * 1.5);
+    gateShake = Math.max(0, gateShake - dt);
+    const lift = Math.round(gateOpen * 14);
+    g.fillStyle = '#8a8496'; g.fillRect(ox - 13, oy - 22 - lift, 5, 24); g.fillRect(ox - 13, oy - 26 - lift, 26, 5);
+    g.fillStyle = '#c9c4d6'; g.fillRect(ox - 12, oy - 25 - lift, 24, 2); g.fillRect(ox - 12, oy - 22 - lift, 2, 22);
+    if (gateOpen < 0.5) { g.fillStyle = '#8a8496'; g.fillRect(ox + 8, oy - 22 - lift, 5, 24); g.fillStyle = '#c9c4d6'; g.fillRect(ox + 9, oy - 22 - lift, 2, 22); }
+    else { g.fillStyle = '#8a8496'; g.fillRect(ox + 8, oy - 22 - lift, 5, 12); }
+    g.fillStyle = '#2a1424'; g.fillRect(ox - 21, oy - 1, 42, 36);
+    g.fillStyle = '#ffd23f'; g.fillRect(ox - 20, oy, 40, 34); g.fillStyle = '#fff3a0'; g.fillRect(ox - 20, oy, 40, 3); g.fillRect(ox - 20, oy, 3, 34); g.fillStyle = '#c99a1c'; g.fillRect(ox - 20, oy + 30, 40, 4); g.fillRect(ox + 16, oy, 4, 34);
+    // copito en el candado y cerradura
+    g.fillStyle = '#e03a3a'; g.fillRect(ox - 3, oy + 8, 6, 6); g.fillRect(ox - 1, oy + 13, 2, 9);
+    g.fillStyle = '#fff'; [[-12, 8], [12, 8], [-12, 24], [12, 24]].forEach(([dx, dy]) => { g.fillRect(ox + dx - 1, oy + dy, 3, 1); g.fillRect(ox + dx, oy + dy - 1, 1, 3); });
+    // estrellitas
+    if (gateOpen > 0 && Math.random() < 0.6) sparks.push({ x: ox + (Math.random() - 0.5) * 50, y: oy + (Math.random() - 0.5) * 50, life: 0.8 });
+    if (Math.floor(t * 2) % 3 === 0) { g.fillStyle = '#fff6b0'; g.fillRect(ox + 12, oy + 4, 1, 3); g.fillRect(ox + 11, oy + 5, 3, 1); }
+    for (let i = sparks.length - 1; i >= 0; i--) { const s = sparks[i]; s.life -= dt; s.y -= 12 * dt; if (s.life <= 0) { sparks.splice(i, 1); continue; } g.fillStyle = Math.random() < 0.5 ? '#ffd23f' : '#fff'; g.fillRect(Math.round(s.x), Math.round(s.y), 1, 1); g.fillRect(Math.round(s.x) - 1, Math.round(s.y), 3, 1); }
+    g.fillStyle = '#fff'; snow.forEach((s) => { s.y += s.v * dt; if (s.y > H) { s.y = 0; s.x = Math.random() * W; } g.fillRect(Math.round(s.x), Math.round(s.y), 1, 1); });
+    st.c.imageSmoothingEnabled = false; st.c.drawImage(st.buf, 0, 0, cv.width, cv.height);
+    requestAnimationFrame(frame);
+  };
+  requestAnimationFrame(frame);
+}
+function gateSlots() { $$('#gate-slots i').forEach((el, i) => { el.textContent = gateBuf[i] || ''; el.classList.toggle('on', i < gateBuf.length); }); }
+async function santaSays(text) { return sayIn($('#gate-text'), text, { who: 'santa', actor: gateSanta }); }
+ENTER.gate = () => {
+  gateBuf = ''; gateOpen = 0; gateHint = 0; gateWrong = 0; gateStarted = false;
+  $('#gate-slots').classList.remove('good', 'bad'); gateSlots();
+  $('#gate-pad').classList.add('hidden'); $('#gate-start').classList.remove('hidden');
+  $('#gate-text').textContent = 'El Polo Norte está cerrado con un candado mágico…';
+  gateScene();
+  leaveHooks.gate = () => { gateAlive = false; };
+};
+async function gateBegin() {
+  if (gateStarted) return; gateStarted = true;
+  A.unlock(); A.sfx.jingle(); A.playSong('silent', { vol: 0.35 });
+  $('#gate-start').classList.add('hidden'); $('#gate-pad').classList.remove('hidden');
+  gateSanta.do('laugh'); A.sfx.hoho();
+  await santaSays(GATE.intro);
+  gateSanta.do('wave');
+}
+$('#gate-start').addEventListener('click', gateBegin);
+$('#gate-cv').addEventListener('click', () => { if (!gateStarted) gateBegin(); else { gateSanta.do('laugh'); A.sfx.hoho(); } });
+$$('#gate-pad button').forEach((b) => b.addEventListener('click', async () => {
+  if (gateBusy) return;
+  A.unlock(); if (!gateStarted) gateBegin();
+  const k = b.dataset.k;
+  if (k === 'hint') {
+    A.sfx.sparkle(); gateSanta.do('wink');
+    const h = GATE.hints[Math.min(gateHint, GATE.hints.length - 1)]; gateHint++;
+    await santaSays(h); return;
+  }
+  if (k === 'del') { gateBuf = gateBuf.slice(0, -1); A.sfx.pop(); gateSlots(); return; }
+  if (gateBuf.length >= 4) return;
+  gateBuf += k; A.sfx.key(+k); gateSlots();
+  if (gateBuf.length < 4) return;
+  gateBusy = true;
+  await sleep(350);
+  if (gateBuf === GATE_CODE) {
+    $('#gate-slots').classList.add('good'); A.stopVoice();
+    A.sfx.unwrap(); for (let i = 0; i <= 10; i++) { gateOpen = i / 10; await sleep(40); }
+    A.sfx.fanfare(); confettiBurst(); skyFx('fireworks'); gateSanta.do('laugh');
+    await santaSays(GATE.right);
+    await sleep(500);
+    gateBusy = false; gateAlive = false;
+    go('phone');
+  } else {
+    gateWrong++; gateShake = 0.6;
+    $('#gate-slots').classList.remove('bad'); void $('#gate-slots').offsetWidth; $('#gate-slots').classList.add('bad');
+    A.sfx.locked();
+    await sleep(300);
+    gateBuf = ''; gateSlots();
+    gateBusy = false;
+    // después de 2 intentos, Santa regala la siguiente pista solito
+    const line = gateWrong >= 2 && gateHint < GATE.hints.length ? GATE.hints[gateHint++] : GATE.wrong[(gateWrong - 1) % GATE.wrong.length];
+    await santaSays(line);
+  }
+}));
 // Para pruebas: ?go=hub
 const q = new URLSearchParams(location.search);
 if (q.get('go')) { A.unlock(); go(q.get('go'), { instant: true }); }
+else ENTER.gate();

@@ -20,21 +20,51 @@ const VOICES = {
 };
 const ALLOWED = ['https://lothra2.github.io', 'http://localhost:8000', 'http://localhost:8765'];
 const KIMI_BASES = ['https://api.moonshot.ai/v1', 'https://api.moonshot.cn/v1'];
-let kimiCfg = null; // se calcula una vez: { base, model }
+let kimiCfg = null; // se calcula una vez: { base, models: [en orden de preferencia], ids }
 
+// Preferimos modelos rápidos de chat. Los modelos que "piensan" van al final.
+const PREF = [/^kimi-k2-turbo/, /^kimi-k2-\d{4}-preview$/, /^kimi-k2-\d{4}/, /^kimi-k2\.\d+-turbo/, /^kimi-latest/, /^moonshot-v1-8k$/, /^moonshot-v1-32k$/, /^kimi-k2\.\d+$/, /^kimi-k2/];
 async function findKimi(env) {
   if (kimiCfg) return kimiCfg;
+  let lastErr = '';
   for (const base of KIMI_BASES) {
     const r = await fetch(`${base}/models`, { headers: { Authorization: `Bearer ${env.KIMI_API_KEY}` } });
-    if (!r.ok) continue;
+    if (!r.ok) { lastErr = `HTTP ${r.status}`; continue; }
     const ids = ((await r.json()).data || []).map((m) => m.id);
-    let model = env.KIMI_MODEL || '';
-    const pref = [/^kimi-k2\.\d+-turbo/, /^kimi-k2-turbo/, /^kimi-k2\.\d+$/, /^kimi-k2-\d{4}/, /^kimi-k2/, /^kimi-latest/, /^moonshot-v1-8k$/];
-    for (const re of pref) { if (model) break; model = ids.filter((x) => re.test(x) && !/thinking|vision/.test(x)).sort().reverse()[0] || ''; }
-    kimiCfg = { base, model: model || ids[0] || 'kimi-k2-turbo-preview' };
+    const models = [];
+    if (env.KIMI_MODEL) models.push(env.KIMI_MODEL);
+    for (const re of PREF) for (const id of ids.filter((x) => re.test(x) && !/thinking|vision/.test(x)).sort().reverse()) if (!models.includes(id)) models.push(id);
+    if (!models.length && ids.length) models.push(ids[0]);
+    kimiCfg = { base, models: models.slice(0, 5), ids };
     return kimiCfg;
   }
-  throw new Error('La key de Kimi no funcionó en moonshot.ai ni en moonshot.cn');
+  throw new Error(`La key de Kimi no funcionó en moonshot.ai ni en moonshot.cn (${lastErr})`);
+}
+
+// Intenta con cada modelo y con parámetros más simples hasta que uno responda
+async function kimiChat(env, messages, temperature, maxTokens) {
+  const cfg = await findKimi(env);
+  const errors = [];
+  for (const model of cfg.models) {
+    const variants = [{ temperature }, {}, { temperature: 1, thinking: { type: 'disabled' } }];
+    for (const extra of variants) {
+      const r = await fetch(`${cfg.base}/chat/completions`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${env.KIMI_API_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model, messages, max_tokens: maxTokens, ...extra }),
+      });
+      if (r.ok) {
+        // recordamos lo que funcionó para la próxima
+        cfg.models = [model, ...cfg.models.filter((m) => m !== model)];
+        return r;
+      }
+      const err = (await r.text()).slice(0, 200);
+      errors.push(`${model} ${r.status}: ${err}`);
+      if (r.status === 401) { kimiCfg = null; throw new Error('Key de Kimi rechazada'); }
+      if (r.status !== 400) break; // otro error: probar el siguiente modelo
+    }
+  }
+  throw new Error(errors.slice(-3).join(' | '));
 }
 
 export default {
@@ -57,7 +87,7 @@ export default {
 
     if (url.pathname === '/status') {
       let kimi = null;
-      if (env.KIMI_API_KEY) { try { kimi = await findKimi(env); } catch (e) { kimi = { error: e.message }; } }
+      if (env.KIMI_API_KEY) { try { const c = await findKimi(env); kimi = { base: c.base, model: c.models[0], candidates: c.models, available: c.ids.slice(0, 40) }; } catch (e) { kimi = { error: e.message }; } }
       return json({ fish: !!env.FISH_API_KEY, kimi });
     }
     if (req.method !== 'POST') return text('Método no permitido', 405);
@@ -69,15 +99,10 @@ export default {
       if (!env.KIMI_API_KEY) return text('Kimi no está configurado', 501);
       const messages = Array.isArray(body.messages) ? body.messages.slice(-30) : null;
       if (!messages || !messages.length) return text('Petición inválida', 400);
-      let cfg;
-      try { cfg = await findKimi(env); } catch (e) { return text(e.message, 502); }
-      const r = await fetch(`${cfg.base}/chat/completions`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${env.KIMI_API_KEY}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: cfg.model, messages, temperature: Math.min(1, Math.max(0, +body.temperature || 0.7)), max_tokens: Math.min(600, +body.max_tokens || 220) }),
-      });
-      if (!r.ok) { if (r.status === 401 || r.status === 404) kimiCfg = null; return text(`Kimi respondió ${r.status}`, 502); }
-      return new Response(r.body, { headers: { ...cors, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
+      try {
+        const r = await kimiChat(env, messages, Math.min(1, Math.max(0, +body.temperature || 0.7)), Math.min(600, +body.max_tokens || 220));
+        return new Response(r.body, { headers: { ...cors, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
+      } catch (e) { return text(`Kimi: ${e.message}`, 502); }
     }
 
     // ---- Voces Fish Audio ----

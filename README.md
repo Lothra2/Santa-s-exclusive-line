@@ -1,9 +1,10 @@
 # Línea Directa al Polo Norte
 
-La línea mágica de Sophie y Alana para hablar con sus elfos, recibir mensajes de Santa y contar los días hasta Navidad. Pixel art retro, música chiptune y voces, todo en una sola página.
+La línea mágica de Sophie y Alana para hablar con sus elfos, recibir mensajes de Santa y contar los días hasta Navidad. Pixel art retro, música chiptune y voces, todo en una sola página, en español y siempre con sonido.
 
 ## Qué hay adentro
 
+- **La clave mágica.** Al abrir, Santa plantea una adivinanza con su voz: la clave son los días de sus cumpleaños, 15 y 21, o sea **1521**. Con el botón 💡 da hasta 3 pistas, y después de 2 intentos fallidos da la siguiente pista solo. Al acertar, el candado se abre con fanfarria y confeti.
 - **El teléfono rojo.** Se toca, marca el 12-25, suena, hay estática y contesta el Polo Norte.
 - **¿Quién llama?** Sophie, Alana o las dos.
 - **El bautizo.** La primera vez, los 3 elfos de la casa piden que las niñas les pongan nombre.

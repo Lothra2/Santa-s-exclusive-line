@@ -23,13 +23,29 @@
 <header id="topbar" class="hidden">
   <button id="btn-back" class="tb-btn" aria-label="Volver"><span class="ico" data-icon="back"></span></button>
   <div id="tb-count" class="tb-count"></div>
-  <button id="btn-lang" class="tb-btn tb-lang">ES</button>
-  <button id="btn-sound" class="tb-btn" aria-label="Sonido"><span class="ico" data-icon="sound"></span></button>
+  <button id="btn-lang" class="tb-btn tb-lang hidden">ES</button>
+  <button id="btn-sound" class="tb-btn hidden" aria-label="Sonido"><span class="ico" data-icon="sound"></span></button>
 </header>
 
 <main id="app">
   <!-- 1. Teléfono -->
-  <section id="scr-phone" class="screen active">
+  <!-- 0. Clave mágica -->
+  <section id="scr-gate" class="screen active">
+    <h1 class="title">🔐 Clave mágica</h1>
+    <canvas id="gate-cv" class="stage"></canvas>
+    <div class="dialog gate-dialog"><div id="gate-text" class="dialog-text">El Polo Norte está cerrado con un candado mágico…</div></div>
+    <div id="gate-slots" class="gate-slots"><i></i><i></i><i></i><i></i></div>
+    <div id="gate-pad" class="gate-pad hidden">
+      <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button>
+      <button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button>
+      <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button>
+      <button data-k="hint" class="hint">💡</button><button data-k="0">0</button><button data-k="del" class="del">←</button>
+    </div>
+    <button id="gate-start" class="pix-btn big gold gate-start">🎅 ¡Toca para escuchar a Santa!</button>
+  </section>
+
+  <!-- 1. Teléfono -->
+  <section id="scr-phone" class="screen">
     <div class="logo">
       <div class="logo-top" data-t="title"></div>
       <div class="logo-sub" data-t="subtitle"></div>

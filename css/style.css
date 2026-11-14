@@ -369,3 +369,30 @@ select.pix-input { appearance: none; -webkit-appearance: none; }
 .panel .pix-input { flex: none; width: 100%; }
 .panel .row .pix-btn, .panel .row label.pix-btn { flex: 1; }
 #phone-msg { padding: 8px 14px; background: rgba(7,10,36,.72); clip-path: var(--corner); }
+
+/* Clave mágica */
+#scr-gate { justify-content: center; gap: 10px; }
+.gate-dialog { min-height: 84px; }
+.gate-slots { display: flex; gap: 12px; justify-content: center; }
+.gate-slots i {
+  width: 58px; height: 64px; display: grid; place-items: center; font-style: normal;
+  font-family: 'Press Start 2P'; font-size: 24px; color: #fff; text-shadow: 3px 3px 0 rgba(0,0,0,.35);
+  background: rgba(255,246,224,.18); clip-path: var(--corner); box-shadow: inset 0 0 0 4px rgba(255,255,255,.35);
+}
+.gate-slots i.on { background: var(--red); box-shadow: inset -4px -5px 0 var(--red2), inset 4px 4px 0 #ff7a6e; animation: popin .2s steps(3); }
+.gate-slots i:nth-child(2).on { background: var(--green); box-shadow: inset -4px -5px 0 var(--green2), inset 4px 4px 0 #8fdc63; }
+.gate-slots i:nth-child(4).on { background: var(--green); box-shadow: inset -4px -5px 0 var(--green2), inset 4px 4px 0 #8fdc63; }
+.gate-slots.bad { animation: shakex .4s steps(4); }
+.gate-slots.good i { background: var(--gold) !important; color: var(--ink); text-shadow: none; box-shadow: inset -4px -5px 0 var(--gold2), inset 4px 4px 0 #fff3a0 !important; animation: hop .6s ease-in-out infinite; }
+.gate-slots.good i:nth-child(2) { animation-delay: .1s; } .gate-slots.good i:nth-child(3) { animation-delay: .2s; } .gate-slots.good i:nth-child(4) { animation-delay: .3s; }
+@keyframes shakex { 0%, 100% { transform: none; } 25% { transform: translateX(-10px); } 75% { transform: translateX(10px); } }
+.gate-pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; max-width: 330px; width: 100%; margin: 0 auto; }
+.gate-pad button {
+  height: 58px; font-family: 'Press Start 2P'; font-size: 20px; color: var(--ink);
+  background: var(--cream); clip-path: var(--corner); box-shadow: inset -4px -5px 0 var(--cream2), inset 4px 4px 0 #fff;
+}
+.gate-pad button:active { transform: translateY(3px); }
+.gate-pad button.hint { background: var(--gold); box-shadow: inset -4px -5px 0 var(--gold2), inset 4px 4px 0 #fff3a0; font-size: 24px; }
+.gate-pad button.del { background: #e6d6b0; }
+.gate-start { align-self: center; animation: pulse 1.2s steps(2) infinite; }
+@media (max-height: 720px) { .gate-pad button { height: 48px; } .gate-slots i { width: 50px; height: 54px; } #scr-gate .title { display: none; } }
