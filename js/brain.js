@@ -1,21 +1,42 @@
-// Conversación con Kimi (Moonshot). La key vive solo en este dispositivo.
+// Conversación con Kimi (Moonshot). Primero por el Worker de Cloudflare (la key vive allá).
+// Si no hay Worker, con una key guardada en este dispositivo.
 import { S, KIDS, today, daysLeft, ageOn, birthdayThisYear, diaryRecent, starsOf } from './store.js';
 import { ELF_INFO, elfName } from './i18n.js';
 import { offlineReply, offlineGreeting, offlineSanta } from './content.js';
 
-export const hasKimi = () => !!(S().kimi && S().kimi.key);
+const viaServer = () => !!(S().voiceServer && S().voiceServer.url);
+export const hasKimi = () => viaServer() || !!(S().kimi && S().kimi.key);
+const serverURL = (path) => S().voiceServer.url.replace(/\/$/, '') + path;
 
-async function call(messages, { maxTokens = 220, temperature = 0.7, timeout = 20000 } = {}) {
+// Revisa qué tiene configurado el Worker (voces y Kimi)
+export async function serverStatus() {
+  if (!viaServer()) return null;
+  try {
+    const r = await fetch(serverURL('/status'), { headers: { 'x-token': S().voiceServer.token || '' } });
+    if (!r.ok) return { error: `HTTP ${r.status}` };
+    return await r.json();
+  } catch (e) { return { error: e.message }; }
+}
+
+async function call(messages, { maxTokens = 220, temperature = 0.7, timeout = 25000 } = {}) {
   const k = S().kimi;
   const ctl = new AbortController();
   const tm = setTimeout(() => ctl.abort(), timeout);
   try {
-    const r = await fetch(`${k.base.replace(/\/$/, '')}/chat/completions`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${k.key}` },
-      body: JSON.stringify({ model: k.model || 'kimi-k2-turbo-preview', messages, temperature, max_tokens: maxTokens }),
-      signal: ctl.signal,
-    });
+    const server = viaServer();
+    const r = server
+      ? await fetch(serverURL('/chat'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-token': S().voiceServer.token || '' },
+        body: JSON.stringify({ messages, temperature, max_tokens: maxTokens }),
+        signal: ctl.signal,
+      })
+      : await fetch(`${k.base.replace(/\/$/, '')}/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${k.key}` },
+        body: JSON.stringify({ model: k.model || 'kimi-k2-turbo-preview', messages, temperature, max_tokens: maxTokens }),
+        signal: ctl.signal,
+      });
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const j = await r.json();
     const txt = j.choices?.[0]?.message?.content || '';

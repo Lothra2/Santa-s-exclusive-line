@@ -25,7 +25,7 @@ La primera vez pide crear un PIN de 4 números.
 
 ### Kimi
 
-En Ajustes peguen la API key de Kimi y toquen **Probar y guardar**. La página detecta sola el servidor, .ai o .cn, y el mejor modelo disponible. La key se guarda solo en ese dispositivo, nunca va al repositorio y solo viaja a Kimi.
+Lo normal es que Kimi viva en el Worker de Cloudflare, explicado más abajo. Si no hay Worker, se puede pegar la key en **Ajustes → Kimi**, y se guarda solo en ese dispositivo.
 
 Sin key, los elfos y Santa usan respuestas ya escritas. Todo funciona igual, solo que menos personalizado.
 
@@ -48,19 +48,26 @@ El repositorio es público, así que los datos de la familia **no van en el cód
 - **Ajustes → Lo que Santa sabe de la familia**: se puede editar cuando quieran.
 - **Deseos y recuerdos**: los deseos que ustedes agregan, los que piden en el chat y los recuerdos que salen solos de las conversaciones. Santa y los elfos los usan para que la conversación crezca día a día.
 
-## Voces de Fish Audio en conversaciones nuevas (Cloudflare)
+## Puente de Cloudflare: voces de Fish y Kimi
 
-Fish Audio no acepta llamadas desde el navegador, así que hace falta un puente pequeño. Está listo en `cloudflare/worker.js` y corre gratis en Cloudflare Workers.
+Fish Audio no acepta llamadas desde el navegador, y es más seguro que las keys no vivan en los dispositivos. Por eso hay un Worker gratis de Cloudflare en `cloudflare/worker.js` que guarda las dos keys y atiende a la página:
 
-1. En dash.cloudflare.com: **Workers & Pages → Create → Create Worker**. Pónganle de nombre `polonorte-voces` y toquen **Deploy**.
-2. Toquen **Edit code**, borren todo, peguen el contenido de `cloudflare/worker.js` y toquen **Deploy**.
-3. En el Worker: **Settings → Variables and Secrets → Add**, de tipo **Secret**:
+- `POST /` o `/tts`: convierte texto en voz de Santa o de un elfo.
+- `POST /chat`: conversa con Kimi. El Worker detecta solo si la key es de moonshot.ai o moonshot.cn y escoge el mejor modelo.
+- `GET /status`: muestra qué está configurado.
+
+Cómo montarlo:
+
+1. En dash.cloudflare.com: **Workers & Pages → Create → Create Worker → Start with Hello World!**, con el nombre `polonorte-voces`, y **Deploy**.
+2. Toquen **Edit code**, peguen `cloudflare/worker.js` completo y hagan **Deploy**.
+3. En **Settings → Variables and Secrets** agreguen tres secretos:
    - `FISH_API_KEY`: la key de Fish Audio.
-   - `ACCESS_TOKEN`: la clave del servidor, la misma que va en el panel.
-4. La dirección queda así: `https://polonorte-voces.<su-subdominio>.workers.dev`. Al abrirla en el navegador dice "Puente de voces del Polo Norte funcionando".
-5. En la página: **Papás → Ajustes → Voces de Fish Audio**, peguen la dirección y la clave y toquen **Probar y guardar**. Santa habla para confirmar.
+   - `KIMI_API_KEY`: la key de Kimi.
+   - `ACCESS_TOKEN`: la clave del servidor, la misma que trae el link privado.
+4. Al abrir la dirección `https://polonorte-voces.<subdominio>.workers.dev` debe decir "Puente de voces del Polo Norte funcionando".
+5. La dirección y la clave llegan a cada dispositivo con el link privado de configuración. También se pueden pegar en **Papás → Ajustes → Puente de Cloudflare** y probar ahí.
 
-El Worker solo acepta pedidos desde `lothra2.github.io` y con la clave correcta, así nadie más gasta sus créditos de Fish.
+El Worker solo acepta pedidos desde `lothra2.github.io` y con la clave correcta. Con el Worker configurado no hace falta pegar la key de Kimi en ningún dispositivo.
 
 ## Publicar en GitHub Pages
 
