@@ -348,33 +348,93 @@ export function gift(idx, part = 'all', locked = false) {
 }
 
 /* ---------------- TELÉFONO ROJO ---------------- */
+// Teléfono antiguo navideño: auricular clásico, disco crema con borde dorado, acebo y cordón de bastón de caramelo
 export function phone(lifted = 0) {
   return cached(`phone|${lifted}`, () => {
-    const p = new Pix(72, 64);
-    // base
-    for (let j = 0; j < 30; j++) {
-      const w = 44 + Math.round(j * 0.75);
-      p.rect(36 - (w >> 1), 30 + j, w, 1, (x) => (x > 36 + (w >> 1) - 6 ? C.R : j < 2 ? C.q : C.r));
+    const p = new Pix(100, 90);
+    const RED = '#e23b3b', RED_D = '#a8222e', RED_L = '#ff7b6b', RED_DD = '#7e1622';
+    const GOLD = '#ffd23f', GOLD_D = '#c99a1c', GOLD_L = '#fff3a0';
+    const CREAM = '#fff6e0', CREAM_D = '#e6d3a8';
+    // ---- base ----
+    for (let j = 0; j <= 38; j++) {
+      const y = 46 + j;
+      let w = Math.round(58 + j * 0.62);
+      if (j === 0) w -= 6; else if (j === 1) w -= 3; else if (j === 2) w -= 1;
+      const x0 = 50 - (w >> 1);
+      p.rect(x0, y, w, 1, (x) => {
+        const k = (x - x0) / w;
+        if (j >= 33) return RED_DD;
+        if (k < 0.07 || j < 2) return RED_L;
+        if (k > 0.86) return RED_D;
+        return RED;
+      });
     }
-    p.rect(12, 59, 48, 3, C.R);
-    // disco
-    p.ell(22, 34, 28, 24, shade(C.w, C.W));
+    p.rect(14, 78, 72, 1, GOLD); p.rect(14, 79, 72, 1, GOLD_D);
+    p.ell(14, 83, 12, 5, '#3a1a20'); p.ell(74, 83, 12, 5, '#3a1a20');
+    // brillo en la carcasa
+    p.rect(26, 50, 2, 10, RED_L); p.rect(29, 49, 6, 1, RED_L);
+    // ---- disco ----
+    const cx = 50, cy = 63;
+    p.ell(cx - 18, cy - 18, 36, 36, (x, y, nx, ny) => (nx + ny < -0.6 ? GOLD_L : nx + ny > 0.7 ? GOLD_D : GOLD));
+    p.ell(cx - 16, cy - 16, 32, 32, (x, y, nx, ny) => (nx + ny > 0.9 ? CREAM_D : CREAM));
     for (let i = 0; i < 10; i++) {
-      const a = rad(-60 + i * 30);
-      p.ell(36 + Math.cos(a) * 9 - 1.5, 46 + Math.sin(a) * 8 - 1.5, 3, 3, C.B);
+      const a = ((-120 + i * 27) * Math.PI) / 180;
+      const hx = cx + Math.cos(a) * 11, hy = cy + Math.sin(a) * 11;
+      p.ell(hx - 3, hy - 3, 6, 6, '#b8956a');
+      p.ell(hx - 2, hy - 2, 4, 4, (x, y, nx, ny) => (nx + ny < -0.2 ? '#d9bf94' : '#f7ecd2'));
     }
-    p.ell(32, 42, 8, 8, C.y); p.ell(34, 44, 4, 4, C.Y);
-    // horquilla
-    p.rect(10, 26, 6, 6, C.R); p.rect(56, 26, 6, 6, C.R);
-    // auricular
-    const dy = lifted ? -10 : 0, tilt = lifted ? 4 : 0;
-    const hy = 18 + dy;
-    p.rect(14, hy + 2, 44, 6, (x, y, i, j) => (j < 2 ? C.q : j > 4 ? C.R : C.r));
-    p.ell(4, hy - tilt + 2, 18, 12, shade(C.r, C.R, C.q));
-    p.ell(50, hy + tilt + 2, 18, 12, shade(C.r, C.R, C.q));
-    // cable de bastón de caramelo
-    for (let i = 0; i < 12; i++) p.rect(62 + (i % 2), hy + 12 + i * 2 - (lifted ? 0 : 0), 3, 2, i % 2 ? C.w : C.r);
-    return p.toCanvas();
+    // tope del disco
+    p.rect(cx + 12, cy + 9, 4, 2, GOLD_D);
+    // centro: copo de nieve sobre rojo
+    p.ell(cx - 5, cy - 5, 10, 10, (x, y, nx, ny) => (nx + ny > 0.5 ? RED_D : RED));
+    [[0, -3], [0, -2], [0, -1], [0, 0], [0, 1], [0, 2], [-3, 0], [-2, 0], [-1, 0], [1, 0], [2, 0], [-2, -2], [2, -2], [-2, 2], [2, 2]].forEach(([dx, dy]) => p.set(cx + dx, cy + dy, '#ffffff'));
+    // ---- horquillas ----
+    p.rect(22, 38, 8, 9, (x, y, i) => (i === 0 ? RED_L : i > 5 ? RED_D : RED));
+    p.rect(70, 38, 8, 9, (x, y, i) => (i === 0 ? RED_L : i > 5 ? RED_D : RED));
+    p.rect(21, 37, 10, 2, GOLD); p.rect(69, 37, 10, 2, GOLD);
+    // ---- auricular ----
+    const dy = lifted ? -14 : 0;
+    const tilt = lifted ? 3 : 0;
+    const hy = 24 + dy;
+    // barra arqueada
+    for (let x = 18; x <= 82; x++) {
+      const arch = Math.round(Math.sin(((x - 18) / 64) * Math.PI) * -2);
+      const ty = Math.round(tilt * ((x - 50) / 32));
+      for (let k = 0; k < 7; k++) p.set(x, hy + arch + k + ty, k === 0 ? RED_L : k === 1 ? '#ff9a8a' : k > 4 ? RED_D : RED);
+    }
+    // copas de los extremos
+    const cup = (x0, y0) => {
+      p.ell(x0, y0, 24, 16, (x, y, nx, ny) => (ny < -0.55 ? RED_L : nx + ny > 0.55 ? RED_D : RED));
+      p.ell(x0 + 3, y0 + 10, 18, 7, RED_DD);
+      p.ell(x0 + 5, y0 + 11, 14, 4, '#5a1018');
+      // nieve encima
+      p.ell(x0 + 4, y0 - 2, 16, 5, (x, y, nx, ny) => (ny > 0.3 ? '#d6e2ff' : '#ffffff'));
+    };
+    cup(6, hy + 2 - tilt);
+    cup(70, hy + 2 + tilt);
+    // acebo en el centro
+    const lx = 50, ly = hy - 2;
+    const leaf = (x0, dir) => {
+      for (let i = 0; i < 12; i++) {
+        const w = Math.round(Math.sin((i / 11) * Math.PI) * 3.5) + 1;
+        const x = x0 + dir * i;
+        p.rect(x, ly - w + 1 + (i % 4 === 1 ? -1 : 0), 1, w * 2, (px, py, ii, j) => (j === w * 2 - 1 || j === 0 ? '#26802f' : j === w ? '#1d5e28' : '#4cc04f'));
+      }
+    };
+    leaf(lx - 3, -1); leaf(lx + 3, 1);
+    const berry = (x, y) => { p.ell(x, y, 6, 6, (px, py, nx, ny) => (nx + ny > 0.5 ? '#b81c24' : '#ff3434')); p.set(x + 1, y + 1, '#ffffff'); p.set(x + 2, y + 1, '#ffd0d0'); };
+    berry(lx - 6, ly - 7); berry(lx, ly - 8); berry(lx - 3, ly - 3);
+    // ---- cordón de bastón de caramelo ----
+    const sx = 88, sy = hy + 16 + tilt;
+    const ex = 90, ey = 66;
+    const n = 16;
+    for (let i = 0; i <= n; i++) {
+      const t = i / n;
+      const x = sx + (ex - sx) * t + Math.sin(t * Math.PI * 5) * 3 + Math.sin(t * Math.PI) * 4;
+      const y = sy + (ey - sy) * t;
+      p.rect(Math.round(x), Math.round(y), 3, 2, i % 2 ? '#ffffff' : RED);
+    }
+    return p.pad(2, 1, 1, 2).toCanvas('#2a1424');
   });
 }
 

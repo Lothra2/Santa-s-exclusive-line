@@ -368,3 +368,4 @@ select.pix-input { appearance: none; -webkit-appearance: none; }
 }
 .panel .pix-input { flex: none; width: 100%; }
 .panel .row .pix-btn, .panel .row label.pix-btn { flex: 1; }
+#phone-msg { padding: 8px 14px; background: rgba(7,10,36,.72); clip-path: var(--corner); }

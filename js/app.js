@@ -139,12 +139,13 @@ function drawPhone(now) {
   const img = phone(phoneLifted);
   const ringing = !phoneBusy && Math.floor(phoneT * 1.0) % 3 === 0;
   const wob = ringing ? (Math.floor(phoneT * 24) % 2 ? 3 : -3) : 0;
-  const sc = 3;
-  c.save(); c.translate(phoneCv.width / 2 + wob, phoneCv.height - 4); c.scale(sc, sc);
-  c.drawImage(img, -img.width / 2, -img.height); c.restore();
+  const sc = 2;
+  c.save(); c.translate(Math.round(phoneCv.width / 2 + wob), phoneCv.height - 2); c.scale(sc, sc);
+  c.drawImage(img, -Math.round(img.width / 2), -img.height); c.restore();
   if (ringing) {
+    // ondas de timbre a los lados del auricular
     c.fillStyle = '#ffd23f';
-    for (let i = 0; i < 3; i++) { c.fillRect(14 + i * 6, 40 - i * 8, 4, 10); c.fillRect(phoneCv.width - 18 - i * 6, 40 - i * 8, 4, 10); }
+    for (let i = 0; i < 3; i++) { c.fillRect(2 + i * 5, 34 - i * 7, 3, 8); c.fillRect(phoneCv.width - 5 - i * 5, 34 - i * 7, 3, 8); }
   }
   phoneRAF = requestAnimationFrame(drawPhone);
 }
