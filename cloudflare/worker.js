@@ -1,4 +1,4 @@
-// VERSIÓN 4. Puente del Polo Norte (Cloudflare Worker): voces de Fish Audio y conversaciones con Kimi.
+// VERSIÓN 5. Puente del Polo Norte (Cloudflare Worker): voces de Fish Audio y conversaciones con Kimi.
 // Secretos en Cloudflare:
 //   FISH_API_KEY  key de Fish Audio
 //   KIMI_API_KEY  key de Kimi (Moonshot)
@@ -23,7 +23,7 @@ const KIMI_BASES = ['https://api.moonshot.ai/v1', 'https://api.moonshot.cn/v1'];
 let kimiCfg = null; // se calcula una vez: { base, models: [en orden de preferencia], ids }
 
 // Preferimos modelos rápidos de chat. Los de código nunca. Los que "piensan" se usan con el pensamiento apagado.
-const PREF = [/^kimi-k2-turbo/, /^kimi-k2-\d{4}-preview$/, /^kimi-latest/, /^moonshot-v1-8k$/, /^kimi-k3(\.\d+)?(-pro)?-highspeed$/, /^kimi-k3$/, /^kimi-k3\.\d+$/, /^kimi-k2\.\d+-turbo/, /^kimi-k2\.\d+$/, /^kimi-k3/, /^kimi-k2/];
+const PREF = [/^kimi-k2-turbo/, /^kimi-k2-\d{4}-preview$/, /^kimi-latest/, /^moonshot-v1-8k$/, /^kimi-k3\.\d+-pro$/, /^kimi-k2\.\d+$/, /^kimi-k3$/, /^kimi-k3\.\d+$/, /^kimi-k2\.\d+-turbo/, /^kimi-k3/, /^kimi-k2/];
 async function findKimi(env) {
   if (kimiCfg) return kimiCfg;
   let lastErr = '';
@@ -62,11 +62,15 @@ async function kimiChat(env, messages, temperature, maxTokens, force = {}) {
   const t0 = Date.now();
   for (const c of combos) {
     if (Date.now() - t0 > 25000) break;
-    const r = await fetch(`${cfg.base}/chat/completions`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${env.KIMI_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: c.model, messages, ...VARIANTS[c.v](temperature, maxTokens) }),
-    });
+    let r;
+    try {
+      r = await fetch(`${cfg.base}/chat/completions`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${env.KIMI_API_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: c.model, messages, ...VARIANTS[c.v](temperature, maxTokens) }),
+        signal: AbortSignal.timeout(12000),
+      });
+    } catch (e) { errors.push(`${c.model}#${c.v} tardó demasiado`); continue; }
     if (r.status === 401) { kimiCfg = null; throw new Error('Key de Kimi rechazada'); }
     if (!r.ok) { errors.push(`${c.model}#${c.v} ${r.status}: ${(await r.text()).slice(0, 120)}`); continue; }
     const j = await r.json();

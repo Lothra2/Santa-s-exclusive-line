@@ -18,31 +18,42 @@ export async function serverStatus() {
   } catch (e) { return { error: e.message }; }
 }
 
-async function call(messages, { maxTokens = 220, temperature = 0.7, timeout = 40000 } = {}) {
-  const k = S().kimi;
+// Modelos probados con la cuenta de la familia: responden en 2 segundos con el pensamiento apagado (variante 1 del Worker)
+const SERVER_MODELS = ['kimi-k3.1-pro', 'kimi-k2.6', 'kimi-k3'];
+
+async function fetchJSON(url, opts, timeout) {
   const ctl = new AbortController();
   const tm = setTimeout(() => ctl.abort(), timeout);
   try {
-    const server = viaServer();
-    const r = server
-      ? await fetch(serverURL('/chat'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-token': S().voiceServer.token || '' },
-        body: JSON.stringify({ messages, temperature, max_tokens: maxTokens }),
-        signal: ctl.signal,
-      })
-      : await fetch(`${k.base.replace(/\/$/, '')}/chat/completions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${k.key}` },
-        body: JSON.stringify({ model: k.model || 'kimi-k2-turbo-preview', messages, temperature, max_tokens: maxTokens }),
-        signal: ctl.signal,
-      });
+    const r = await fetch(url, { ...opts, signal: ctl.signal });
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const j = await r.json();
-    const txt = j.choices?.[0]?.message?.content || '';
-    if (!txt.trim()) throw new Error('empty');
-    return txt.trim();
+    const txt = (j.choices?.[0]?.message?.content || '').trim();
+    if (!txt) throw new Error('empty');
+    return txt;
   } finally { clearTimeout(tm); }
+}
+
+async function call(messages, { maxTokens = 220, temperature = 0.7, timeout = 15000 } = {}) {
+  if (viaServer()) {
+    let lastErr;
+    for (const model of SERVER_MODELS) {
+      try {
+        return await fetchJSON(serverURL('/chat'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-token': S().voiceServer.token || '' },
+          body: JSON.stringify({ messages, temperature, max_tokens: maxTokens, model, variant: 1 }),
+        }, timeout);
+      } catch (e) { lastErr = e; }
+    }
+    throw lastErr;
+  }
+  const k = S().kimi;
+  return fetchJSON(`${k.base.replace(/\/$/, '')}/chat/completions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${k.key}` },
+    body: JSON.stringify({ model: k.model || 'kimi-k2-turbo-preview', messages, temperature, max_tokens: maxTokens }),
+  }, timeout + 10000);
 }
 
 // Prueba la key, busca el mejor modelo disponible y el servidor correcto (.ai o .cn)
@@ -159,7 +170,7 @@ Write ONLY in ${lang === 'es' ? 'Spanish (warm Latin American Spanish)' : 'Engli
 - Make every letter different. Never mention a naughty list or threats. Never break character.
 
 ${context(kid, lang)}`;
-  try { return await call([{ role: 'system', content: sys }, { role: 'user', content: `Write a new letter now. Variation seed: ${Math.random().toString(36).slice(2, 6)}` }], { maxTokens: 400, temperature: 0.9, timeout: 30000 }); }
+  try { return await call([{ role: 'system', content: sys }, { role: 'user', content: `Write a new letter now. Variation seed: ${Math.random().toString(36).slice(2, 6)}` }], { maxTokens: 450, temperature: 0.9, timeout: 25000 }); }
   catch (e) { return offlineSanta({ lang, kid }); }
 }
 
