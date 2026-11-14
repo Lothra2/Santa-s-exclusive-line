@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#070a24">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Polo Norte">
+<title>Línea Directa al Polo Norte</title>
+<link rel="icon" href="icon.png">
+<link rel="apple-touch-icon" href="icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;600;700&family=Press+Start+2P&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<canvas id="sky"></canvas>
+
+<header id="topbar" class="hidden">
+  <button id="btn-back" class="tb-btn" aria-label="Volver"><span class="ico" data-icon="back"></span></button>
+  <div id="tb-count" class="tb-count"></div>
+  <button id="btn-lang" class="tb-btn tb-lang">ES</button>
+  <button id="btn-sound" class="tb-btn" aria-label="Sonido"><span class="ico" data-icon="sound"></span></button>
+</header>
+
+<main id="app">
+  <!-- 1. Teléfono -->
+  <section id="scr-phone" class="screen active">
+    <div class="logo">
+      <div class="logo-top" data-t="title"></div>
+      <div class="logo-sub" data-t="subtitle"></div>
+    </div>
+    <div class="phone-wrap">
+      <canvas id="phone-cv" width="220" height="190"></canvas>
+      <div id="phone-display" class="phone-display hidden"></div>
+    </div>
+    <div id="phone-msg" class="blink-text" data-t="tapPhone"></div>
+  </section>
+
+  <!-- 2. ¿Quién llama? -->
+  <section id="scr-who" class="screen">
+    <h1 class="title" data-t="whoCalls"></h1>
+    <div class="who-cards">
+      <button class="who-card" data-kid="sophie"><span class="who-orn"></span><span class="who-name">Sophie</span></button>
+      <button class="who-card" data-kid="alana"><span class="who-orn"></span><span class="who-name">Alana</span></button>
+      <button class="who-card who-both" data-kid="both"><span class="who-orn"></span><span class="who-name" data-t="both"></span></button>
+    </div>
+  </section>
+
+  <!-- 3. Bautizo de los elfos -->
+  <section id="scr-naming" class="screen">
+    <canvas id="naming-cv" class="stage"></canvas>
+    <div class="dialog"><div id="naming-text" class="dialog-text"></div></div>
+    <div id="naming-form" class="naming-form hidden">
+      <div class="row">
+        <button id="naming-mic" class="mic-btn"><span class="ico" data-icon="mic"></span></button>
+        <input id="naming-input" class="pix-input" maxlength="16" autocomplete="off">
+        <button id="naming-ok" class="pix-btn green" data-t="nameOk"></button>
+      </div>
+      <div id="naming-ideas" class="chips"></div>
+    </div>
+    <button id="naming-go" class="pix-btn big hidden">🎄</button>
+  </section>
+
+  <!-- 4. Taller (menú principal) -->
+  <section id="scr-hub" class="screen">
+    <div class="countdown">
+      <div id="cd-days" class="cd-days"></div>
+      <div id="cd-clock" class="cd-clock"></div>
+    </div>
+    <div class="workshop-wrap">
+      <canvas id="workshop-cv" class="stage"></canvas>
+      <div id="elf-tags"></div>
+      <div id="hub-bubble" class="bubble hidden"></div>
+    </div>
+    <nav class="menu">
+      <button class="menu-btn" data-go="chat"><canvas data-big="chat"></canvas><span data-t="menuChat"></span></button>
+      <button class="menu-btn" data-go="cal"><canvas data-big="calendar"></canvas><span data-t="menuCal"></span><i id="cal-badge" class="badge hidden">!</i></button>
+      <button class="menu-btn" data-go="santa"><canvas data-big="santa"></canvas><span data-t="menuSanta"></span></button>
+      <button class="menu-btn" data-go="stars"><canvas data-big="star"></canvas><span data-t="menuStars"></span></button>
+    </nav>
+    <div class="hub-foot">
+      <button id="btn-who" class="link-btn"></button>
+      <button id="btn-parents" class="lock-btn" aria-label="Papás"><span class="ico" data-icon="lock"></span></button>
+    </div>
+  </section>
+
+  <!-- 5. Chat -->
+  <section id="scr-chat" class="screen">
+    <div id="chat-tabs" class="chat-tabs"></div>
+    <canvas id="chat-cv" class="stage chat-stage"></canvas>
+    <div id="chat-log" class="chat-log"></div>
+    <div id="chat-quick" class="chips scroll-x"></div>
+    <div class="chat-input">
+      <button id="chat-mic" class="mic-btn big"><span class="ico" data-icon="mic"></span></button>
+      <input id="chat-text" class="pix-input" maxlength="200" autocomplete="off">
+      <button id="chat-send" class="pix-btn red send"><span class="ico" data-icon="send"></span></button>
+    </div>
+  </section>
+
+  <!-- 6. Calendario -->
+  <section id="scr-cal" class="screen">
+    <h1 class="title" data-t="calTitle"></h1>
+    <div id="cal-grid" class="cal-grid"></div>
+  </section>
+
+  <!-- 7. Santa -->
+  <section id="scr-santa" class="screen">
+    <canvas id="santa-cv" class="stage santa-stage"></canvas>
+    <div id="santa-letter" class="letter hidden"><div id="santa-text" class="letter-text"></div></div>
+    <div id="santa-actions" class="row center hidden">
+      <button id="santa-again" class="pix-btn green" data-t="santaAgain"></button>
+      <button id="santa-new" class="pix-btn red" data-t="santaNew"></button>
+    </div>
+  </section>
+
+  <!-- 8. Estrellas -->
+  <section id="scr-stars" class="screen">
+    <h1 class="title" data-t="starsTitle"></h1>
+    <div id="jars" class="jars"></div>
+    <div id="stars-list" class="stars-list"></div>
+  </section>
+
+  <!-- 9. Papás -->
+  <section id="scr-parents" class="screen">
+    <div id="parents-root"></div>
+  </section>
+</main>
+
+<div id="modal" class="modal hidden"><div id="modal-box" class="modal-box"></div></div>
+<div id="toast" class="toast hidden"></div>
+<canvas id="fx"></canvas>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

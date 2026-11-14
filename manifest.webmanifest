@@ -1,0 +1,10 @@
+{
+  "name": "Línea Directa al Polo Norte",
+  "short_name": "Polo Norte",
+  "start_url": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#070a24",
+  "theme_color": "#070a24",
+  "icons": [{ "src": "icon.png", "sizes": "512x512", "type": "image/png" }]
+}
