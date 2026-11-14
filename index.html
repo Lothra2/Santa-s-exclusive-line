@@ -107,14 +107,18 @@
   </section>
 
   <!-- 5. Chat -->
-  <section id="scr-chat" class="screen">
+  <section id="scr-chat" class="screen mode-voice">
+    <div class="seg chat-mode">
+      <button data-mode="voice">🎙️ Hablar</button>
+      <button data-mode="text">⌨️ Escribir</button>
+    </div>
     <div id="chat-tabs" class="chat-tabs"></div>
     <canvas id="chat-cv" class="stage chat-stage"></canvas>
     <div id="chat-log" class="chat-log"></div>
     <div id="call-status" class="call-status hidden"></div>
     <div id="chat-quick" class="chips scroll-x"></div>
     <div class="chat-input">
-      <button id="chat-mic" class="mic-btn big"><span class="ico" data-icon="mic"></span></button>
+      <button id="chat-mic" class="mic-btn big"><span class="ico" data-icon="mic"></span><span class="mic-label">Toca y habla</span></button>
       <input id="chat-text" class="pix-input" maxlength="200" autocomplete="off">
       <button id="chat-send" class="pix-btn red send"><span class="ico" data-icon="send"></span></button>
     </div>

@@ -90,7 +90,7 @@ function closeModal() { $('#modal').classList.add('hidden'); A.stopVoice(); cons
 $('#modal').addEventListener('click', (e) => { if (e.target.id === 'modal') closeModal(); });
 
 // Escribe el texto letra por letra con sonidito y lo lee en voz alta
-async function sayIn(el, text, { who = 'narrator', actor = null, voice = true, spoken = null } = {}) {
+async function sayIn(el, text, { who = 'narrator', actor = null, voice = true, spoken = null, speed = 26 } = {}) {
   let skip = false; const onSkip = () => (skip = true); el.addEventListener('click', onSkip, { once: true });
   el.textContent = '';
   const speakP = voice && S().voice ? A.speak(spoken || text, { who, lang: lang(), onStart: () => actor && (actor.talking = true) }) : null;
@@ -100,7 +100,7 @@ async function sayIn(el, text, { who = 'narrator', actor = null, voice = true, s
     if (skip) { el.textContent = text; break; }
     el.textContent = text.slice(0, i + 1);
     if (!speakP && i % 2 === 0 && /\S/.test(text[i])) A.sfx.blip(pitch);
-    await sleep(/[.!?¡¿,]/.test(text[i]) ? 90 : 26);
+    await sleep(/[.!?¡¿,]/.test(text[i]) ? Math.max(40, speed * 3) : speed);
   }
   if (speakP) await speakP; else await sleep(300);
   if (actor) actor.talking = false;
@@ -390,6 +390,7 @@ let chatElf = 'scarf', chatActor = null, chatBusy = false, chatAlive = false;
 const greeted = new Set();
 ENTER.chat = async () => {
   if (A.currentSong() !== 'deck') A.playSong('deck', { vol: 0.35 });
+  applyChatMode();
   renderTabs();
   $('#chat-quick').innerHTML = t('quick').map((q) => `<button class="chip">${esc(q)}</button>`).join('');
   $$('#chat-quick .chip').forEach((b) => (b.onclick = () => { A.sfx.tap(); sendChat(b.textContent.replace(/^[^\p{L}¡¿]+/u, '')); }));
@@ -471,27 +472,55 @@ async function elfSays(text) {
   pushMsg({ from: 'elf', elf: chatElf, text });
   const span = el.querySelector('span');
   const obs = new MutationObserver(() => (log.scrollTop = log.scrollHeight)); obs.observe(span, { childList: true, characterData: true, subtree: true });
-  await sayIn(span, text, { who: chatElf, actor: chatActor });
+  const voice = chatMode() === 'voice';
+  await sayIn(span, text, { who: chatElf, actor: chatActor, voice, speed: voice ? 26 : 12 });
   obs.disconnect();
 }
-function typing(on) {
+const chatMode = () => S().chatMode || 'voice';
+function applyChatMode() {
+  const m = chatMode();
+  const scr = $('#scr-chat'); scr.classList.toggle('mode-voice', m === 'voice'); scr.classList.toggle('mode-text', m === 'text');
+  $$('.chat-mode button').forEach((b) => b.classList.toggle('on', b.dataset.mode === m));
+}
+$$('.chat-mode button').forEach((b) => b.addEventListener('click', () => {
+  if (chatMode() === b.dataset.mode) return;
+  A.sfx.tap(); A.stopVoice();
+  update((s) => (s.chatMode = b.dataset.mode));
+  applyChatMode();
+  if (b.dataset.mode === 'text') { stopCall(); setTimeout(() => $('#chat-text').focus(), 100); }
+  else toast('🎙️ Toca el micrófono y habla con tu elfo');
+}));
+let waitTimer = null;
+const WAIT = {
+  think: ['📡 Enviando tu mensaje al Polo Norte…', '❄️ La señal mágica cruza el océano…', '☀️ ¡Uf! Con el calor de Vietnam los copos de nieve viajan más despacito…', '🧝 {elf} está pensando su respuesta…', '🦌 Rudolph ilumina el camino de la señal…'],
+  connect: ['📞 Conectando con {elf} en el taller…', '❄️ La señal mágica cruza el océano…', '☀️ ¡Uf! Con el calor de Vietnam los copos de nieve viajan más despacito…', '🧝 {elf} se está acomodando el gorro…'],
+  voice: ['🎙️ {elf} está calentando su voz…', '🔔 Afinando los cascabeles para hablarte…', '✨ La respuesta ya viene en camino…'],
+};
+function typing(on, stage = 'think') {
   const log = $('#chat-log');
+  clearInterval(waitTimer);
   const old = log.querySelector('.typing'); if (old) old.remove();
-  if (on) { const el = document.createElement('div'); el.className = 'msg elf typing'; el.innerHTML = `<b>${esc(elfName(chatElf))}</b>${t('thinking')} <i>•</i><i>•</i><i>•</i>`; log.appendChild(el); log.scrollTop = log.scrollHeight; }
+  if (!on) return;
+  const el = document.createElement('div'); el.className = 'msg elf typing';
+  el.innerHTML = `<b>${esc(elfName(chatElf))}</b><span class="signal"><i></i><i></i><i></i><i></i></span><span class="wait-line"></span>`;
+  log.appendChild(el); log.scrollTop = log.scrollHeight;
+  const lines = WAIT[stage]; let i = 0;
+  const show = () => { el.querySelector('.wait-line').textContent = lines[i++ % lines.length].replace('{elf}', elfName(chatElf)); log.scrollTop = log.scrollHeight; };
+  show(); waitTimer = setInterval(show, 2600);
 }
 // chatBusy = el elfo está pensando (esperando a Kimi). Mientras habla se le puede interrumpir.
 let chatTurn = 0;
 async function greetIfNeeded() {
   const key = `${S().kid}|${chatElf}`;
   if (greeted.has(key)) return;
-  greeted.add(key); chatBusy = true; typing(true);
+  greeted.add(key); chatBusy = true; typing(true, 'connect');
   const turn = ++chatTurn;
-  const [text] = await Promise.all([elfGreeting(chatElf, S().kid, lang()), sleep(700)]);
-  await A.prepareVoice(chatElf, lang(), text, 9000);
+  const [text] = await Promise.all([elfGreeting(chatElf, S().kid, lang()), sleep(chatMode() === 'voice' ? 700 : 200)]);
+  if (chatMode() === 'voice' && turn === chatTurn) { typing(true, 'voice'); await A.prepareVoice(chatElf, lang(), text, 9000); }
   if (turn !== chatTurn) return; // ya escribieron algo nuevo
   typing(false); chatBusy = false;
   if (current === 'chat') await elfSays(text);
-  if (turn === chatTurn && callMode && current === 'chat') setTimeout(callListen, 250);
+  if (turn === chatTurn && callMode && chatMode() === 'voice' && current === 'chat') setTimeout(callListen, 250);
 }
 async function sendChat(text) {
   text = (text || '').trim(); if (!text) return;
@@ -506,8 +535,8 @@ async function sendChat(text) {
   typing(true); chatActor.do('look');
   let res;
   try {
-    [res] = await Promise.all([elfReply(chatElf, S().kid, chatHistory(), lang()), sleep(600)]);
-    if (res.text) await A.prepareVoice(chatElf, lang(), res.text, 9000);
+    [res] = await Promise.all([elfReply(chatElf, S().kid, chatHistory(), lang()), sleep(chatMode() === 'voice' ? 600 : 150)]);
+    if (res.text && chatMode() === 'voice' && turn === chatTurn) { typing(true, 'voice'); await A.prepareVoice(chatElf, lang(), res.text, 9000); }
   } catch (e) { res = { text: t('lineBusy') }; }
   typing(false); chatBusy = false;
   if (turn !== chatTurn) return;
@@ -519,7 +548,7 @@ async function sendChat(text) {
   else chatActor.do(Math.random() < 0.5 ? 'hop' : 'wave');
   if (current === 'chat') await elfSays(res.text || t('lineBusy'));
   if (pendingKidMsgs() >= 6) rememberChat();
-  if (turn === chatTurn && callMode && current === 'chat') setTimeout(callListen, 250);
+  if (turn === chatTurn && callMode && chatMode() === 'voice' && current === 'chat') setTimeout(callListen, 250);
 }
 $('#chat-send').addEventListener('click', () => sendChat($('#chat-text').value));
 $('#chat-text').addEventListener('keydown', (e) => { if (e.key === 'Enter') sendChat($('#chat-text').value); });

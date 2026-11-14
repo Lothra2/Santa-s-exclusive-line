@@ -404,3 +404,22 @@ select.pix-input { appearance: none; -webkit-appearance: none; }
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .mic-btn.call { outline: 4px solid var(--green); outline-offset: -4px; }
+
+/* Modos del chat: hablar (solo voz) y escribir (solo texto) */
+.chat-mode { flex-shrink: 0; }
+.chat-mode button { padding: 9px 4px; font-size: clamp(15px, 4.2vw, 18px); }
+.mode-voice #chat-text, .mode-voice #chat-send, .mode-voice #chat-quick { display: none; }
+.mode-voice .chat-input { justify-content: center; }
+.mode-voice #chat-mic { width: auto; height: 78px; padding: 0 26px; gap: 10px; display: flex; align-items: center; }
+.mode-voice #chat-mic .ico { width: 38px; height: 34px; }
+.mic-label { display: none; font-family: 'Press Start 2P'; font-size: 13px; color: var(--ink); }
+.mode-voice .mic-label { display: inline; }
+.mode-voice #chat-mic.on .mic-label { color: #fff; }
+.mode-text #chat-mic { display: none; }
+/* Espera con mensajes que rotan */
+.msg.typing .wait-line { display: block; }
+.msg.typing .signal { display: inline-flex; gap: 2px; align-items: flex-end; height: 16px; margin-right: 6px; vertical-align: middle; }
+.msg.typing .signal i { width: 4px; background: var(--green); animation: sig 1s steps(2) infinite; }
+.msg.typing .signal i:nth-child(1) { height: 5px; } .msg.typing .signal i:nth-child(2) { height: 9px; animation-delay: .2s; }
+.msg.typing .signal i:nth-child(3) { height: 13px; animation-delay: .4s; } .msg.typing .signal i:nth-child(4) { height: 16px; animation-delay: .6s; }
+@keyframes sig { 50% { opacity: .25; } }
