@@ -401,7 +401,7 @@ function renderTabs() {
   $('#chat-tabs').innerHTML = ELF_IDS.map((id) => `<button class="chat-tab ${id === chatElf ? 'on' : ''}" data-id="${id}"><canvas></canvas><span>${esc(elfName(id))}</span></button>`).join('');
   $$('#chat-tabs .chat-tab').forEach((b) => {
     const cv = b.querySelector('canvas'); const src = elf(b.dataset.id, {}); cv.width = src.width; cv.height = 30; cv.getContext('2d').drawImage(src, 0, 0);
-    b.onclick = () => { if (chatBusy) return; A.sfx.tap(); A.stopVoice(); chatElf = b.dataset.id; renderTabs(); chatActor = makeChatActor(); renderLog(); greetIfNeeded(); };
+    b.onclick = () => { A.sfx.tap(); A.stopVoice(); chatTurn++; chatBusy = false; typing(false); chatElf = b.dataset.id; renderTabs(); chatActor = makeChatActor(); renderLog(); greetIfNeeded(); };
   });
 }
 function makeChatActor() { const a = new ElfActor(chatElf, 96, 62); a.do('hop'); a.noShadow = false; return a; }
@@ -479,28 +479,38 @@ function typing(on) {
   const old = log.querySelector('.typing'); if (old) old.remove();
   if (on) { const el = document.createElement('div'); el.className = 'msg elf typing'; el.innerHTML = `<b>${esc(elfName(chatElf))}</b>${t('thinking')} <i>•</i><i>•</i><i>•</i>`; log.appendChild(el); log.scrollTop = log.scrollHeight; }
 }
+// chatBusy = el elfo está pensando (esperando a Kimi). Mientras habla se le puede interrumpir.
+let chatTurn = 0;
 async function greetIfNeeded() {
   const key = `${S().kid}|${chatElf}`;
   if (greeted.has(key)) return;
   greeted.add(key); chatBusy = true; typing(true);
+  const turn = ++chatTurn;
   const [text] = await Promise.all([elfGreeting(chatElf, S().kid, lang()), sleep(700)]);
   await A.prepareVoice(chatElf, lang(), text, 9000);
-  typing(false);
+  if (turn !== chatTurn) return; // ya escribieron algo nuevo
+  typing(false); chatBusy = false;
   if (current === 'chat') await elfSays(text);
-  chatBusy = false;
+  if (turn === chatTurn && callMode && current === 'chat') setTimeout(callListen, 250);
 }
 async function sendChat(text) {
-  text = (text || '').trim(); if (!text || chatBusy) return;
+  text = (text || '').trim(); if (!text) return;
+  if (chatBusy) { toast('⏳ El elfo está pensando… ¡un segundito!'); return; }
   chatBusy = true; A.stopVoice();
+  const turn = ++chatTurn;
   $('#chat-text').value = '';
   pushMsg({ from: 'kid', elf: chatElf, text });
   const log = $('#chat-log');
   const el = document.createElement('div'); el.className = `msg kid ${S().kid}`; el.textContent = text; log.appendChild(el); log.scrollTop = log.scrollHeight;
   A.sfx.pop();
   typing(true); chatActor.do('look');
-  const [res] = await Promise.all([elfReply(chatElf, S().kid, chatHistory(), lang()), sleep(600)]);
-  if (res.text) await A.prepareVoice(chatElf, lang(), res.text, 9000);
-  typing(false);
+  let res;
+  try {
+    [res] = await Promise.all([elfReply(chatElf, S().kid, chatHistory(), lang()), sleep(600)]);
+    if (res.text) await A.prepareVoice(chatElf, lang(), res.text, 9000);
+  } catch (e) { res = { text: t('lineBusy') }; }
+  typing(false); chatBusy = false;
+  if (turn !== chatTurn) return;
   if (res.wish) {
     update((s) => s.wishes.push({ id: uid(), date: today(), kid: s.kid, text: res.wish }));
     A.sfx.sparkle(); chatActor.do('cheer'); chatActor.heart();
@@ -509,8 +519,7 @@ async function sendChat(text) {
   else chatActor.do(Math.random() < 0.5 ? 'hop' : 'wave');
   if (current === 'chat') await elfSays(res.text || t('lineBusy'));
   if (pendingKidMsgs() >= 6) rememberChat();
-  if (callMode && current === 'chat') setTimeout(callListen, 250);
-  chatBusy = false;
+  if (turn === chatTurn && callMode && current === 'chat') setTimeout(callListen, 250);
 }
 $('#chat-send').addEventListener('click', () => sendChat($('#chat-text').value));
 $('#chat-text').addEventListener('keydown', (e) => { if (e.key === 'Enter') sendChat($('#chat-text').value); });
@@ -541,7 +550,7 @@ $('#chat-mic').addEventListener('click', () => {
   A.unlock();
   if (callMode) { stopCall('📞 Llamada en pausa. Toca el micrófono para seguir.'); return; }
   callMode = true; callQuiet = 0; $('#chat-mic').classList.add('call');
-  if (chatBusy) { setCallStatus(true, '⏳ Espera que el elfo termine…'); return; }
+  if (chatBusy) { setCallStatus(true, '⏳ El elfo está pensando… ¡un segundito!'); return; }
   callListen();
 });
 
