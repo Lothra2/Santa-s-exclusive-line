@@ -36,7 +36,7 @@ Cada dispositivo guarda sus propios datos. Para tener lo mismo en el iPad y en e
 ## Voces
 
 - Las frases fijas tienen voces grabadas con Fish Audio en la carpeta `audio/`: llamada, saludos, bautizo, calendario, días especiales y "jo, jo, jo". Cada archivo se llama por un hash de voz y texto, y `audio/manifest.json` los lista.
-- Lo que cambia en cada conversación, como el chat con Kimi o las cartas de Santa, usa las voces de Fish si el puente de Netlify está configurado. Si no, usa la voz del navegador con tono de elfo o de Santa.
+- Lo que cambia en cada conversación, como el chat con Kimi o las cartas de Santa, usa las voces de Fish si el puente de Cloudflare está configurado. Si no, usa la voz del navegador con tono de elfo o de Santa.
 - El sonido siempre arranca encendido, también con el interruptor de silencio del iPhone o iPad activado.
 - Si cambian un texto fijo, ese texto pasa a la voz del navegador hasta que se vuelva a grabar.
 
