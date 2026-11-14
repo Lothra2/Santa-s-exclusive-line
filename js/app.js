@@ -387,12 +387,14 @@ ENTER.hub = async () => {
     else if (!ENTER.hub.greeted) { ENTER.hub.greeted = true; const id = ELF_IDS[Math.floor(Math.random() * 3)]; hubSay(id, lang() === 'es' ? `¡Hola, ${kidNames(S().kid)}! Toca a un elfo.` : `Hi, ${kidNames(S().kid)}! Tap an elf.`); }
   }
 };
+// El nombre del elfo del medio va sobre su cabeza, así los nombres largos nunca chocan
+const tagTop = (id, p) => (id === 'stripe' ? p.y - 58 / 128 : p.y);
 function moveTags() {
-  $$('#elf-tags .elf-tag').forEach((el) => { const p = workshop.elfScreenPos(el.dataset.id); el.style.left = (p.x * 100) + '%'; });
+  $$('#elf-tags .elf-tag').forEach((el) => { const p = workshop.elfScreenPos(el.dataset.id); el.style.left = (p.x * 100) + '%'; el.style.top = (tagTop(el.dataset.id, p) * 100) + '%'; });
 }
 function placeTags() {
   const box = $('#elf-tags');
-  box.innerHTML = ELF_IDS.map((id) => { const p = workshop.elfScreenPos(id); return `<div class="elf-tag" data-id="${id}" style="left:${p.x * 100}%;top:${p.y * 100}%">${esc(elfName(id))}</div>`; }).join('');
+  box.innerHTML = ELF_IDS.map((id) => { const p = workshop.elfScreenPos(id); return `<div class="elf-tag ${id === 'stripe' ? 'up' : ''}" data-id="${id}" style="left:${p.x * 100}%;top:${tagTop(id, p) * 100}%">${esc(elfName(id))}</div>`; }).join('');
 }
 async function hubSay(id, text) {
   if (!workshop) return;

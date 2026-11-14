@@ -529,3 +529,24 @@ select.pix-input { appearance: none; -webkit-appearance: none; }
 .toast { white-space: normal; text-align: center; width: max-content; max-width: min(92vw, 560px); line-height: 1.3; }
 .cal-cell.future { background: rgba(58, 66, 118, .92); box-shadow: inset 0 0 0 2px rgba(160,170,220,.45), inset -3px -4px 0 rgba(0,0,0,.25); }
 .cal-cell.future .d, .cal-cell.future .wd { color: #c9d0f5; }
+
+/* App instalada: nunca debajo de la barra de la hora y la batería */
+@media (display-mode: standalone), (display-mode: fullscreen) {
+  #topbar { padding-top: max(env(safe-area-inset-top), 30px); }
+  #app { padding-top: calc(max(env(safe-area-inset-top), 30px) + 8px); }
+  #topbar ~ #app { padding-top: calc(max(env(safe-area-inset-top), 30px) + 62px); }
+  #topbar.hidden ~ #app { padding-top: calc(max(env(safe-area-inset-top), 30px) + 8px); }
+  #app { padding-bottom: calc(max(env(safe-area-inset-bottom), 16px) + 6px); }
+}
+
+/* Cuando la página se ajusta sola en celulares que la encogen */
+#sky, #fx { width: var(--fit-w, 100vw); height: var(--fit-h, 100vh); }
+#app { height: var(--fit-h, 100dvh); }
+.modal { width: var(--fit-w, 100vw); height: var(--fit-h, 100vh); }
+.toast { max-width: min(calc(var(--fit-w, 100vw) * 0.92), 560px); }
+#topbar { width: var(--fit-w, 100%); }
+
+.elf-tag.up { transform: translate(-50%, -100%); }
+.elf-tag { font-size: clamp(11px, 2.9vw, 15px); max-width: 34%; overflow: hidden; text-overflow: ellipsis; }
+.gate-start { animation: softpulse 1.4s ease-in-out infinite; }
+@keyframes softpulse { 50% { transform: scale(1.03); filter: brightness(1.08); } }

@@ -2,7 +2,37 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, viewport-fit=cover, user-scalable=no">
+<script>
+/* Algunos celulares (Samsung al instalar la página, o con "versión de escritorio" activada)
+   dibujan la página como si fuera un computador y todo se ve diminuto.
+   Si la página es mucho más ancha que la pantalla real, la agrandamos para que calce. */
+(function () {
+  var last = 0;
+  function fit() {
+    var touch = (navigator.maxTouchPoints || 0) > 0 || 'ontouchstart' in window;
+    var land = window.innerWidth > window.innerHeight;
+    var sw = screen.width || 0, sh = screen.height || 0;
+    var phys = land ? Math.max(sw, sh) : Math.min(sw, sh);
+    var z = 1;
+    var w = window.innerWidth, h = window.innerHeight;
+    // 1) la página es mucho más ancha que la pantalla que reporta el celular
+    if (touch && phys > 0 && w > phys * 1.25) z = w / phys;
+    // 2) pantalla táctil, vertical y alargada como un teléfono, pero "ancha" como tablet: es un teléfono encogido
+    if (touch && h > w && h / w > 1.75 && w > 460) z = Math.max(z, w / 400);
+    z = Math.round(z * 100) / 100;
+    var root = document.documentElement;
+    if (z !== last) { last = z; root.style.zoom = z === 1 ? '' : String(z); root.dataset.fit = z; }
+    // tamaño real disponible ya ajustado, para que nada se corte abajo ni a los lados
+    if (z === 1) { root.style.removeProperty('--fit-w'); root.style.removeProperty('--fit-h'); }
+    else { root.style.setProperty('--fit-w', (w / z) + 'px'); root.style.setProperty('--fit-h', (h / z) + 'px'); }
+  }
+  fit();
+  window.addEventListener('resize', fit);
+  window.addEventListener('orientationchange', function () { setTimeout(fit, 250); });
+  window.addEventListener('pageshow', fit);
+})();
+</script>
 <meta name="theme-color" content="#070a24">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">

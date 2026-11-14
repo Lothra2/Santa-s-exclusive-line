@@ -96,8 +96,11 @@ function makeLayers() {
 
 function setup() {
   const dpr = 1;
-  scale = Math.max(2, Math.round(Math.min(innerWidth, innerHeight) / 130));
-  W = Math.ceil(innerWidth / scale); H = Math.ceil(innerHeight / scale);
+  // tamaño visible real (si la página se ajustó con zoom, usamos el tamaño ajustado)
+  const z = parseFloat(document.documentElement.dataset.fit || '1') || 1;
+  const vw = innerWidth / z, vh = innerHeight / z;
+  scale = Math.max(2, Math.round(Math.min(vw, vh) / 130));
+  W = Math.ceil(vw / scale); H = Math.ceil(vh / scale);
   cv.width = W * dpr; cv.height = H * dpr;
   x.imageSmoothingEnabled = false;
   parts = parts.filter((p) => p.kind !== 'smokeSrc');
