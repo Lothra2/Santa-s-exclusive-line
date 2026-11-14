@@ -1,4 +1,0 @@
-# Solo hace falta para el puente de voces de Fish Audio. La página sigue publicada en GitHub Pages.
-[build]
-  publish = "."
-  functions = "netlify/functions"

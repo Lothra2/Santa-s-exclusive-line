@@ -48,19 +48,19 @@ El repositorio es público, así que los datos de la familia **no van en el cód
 - **Ajustes → Lo que Santa sabe de la familia**: se puede editar cuando quieran.
 - **Deseos y recuerdos**: los deseos que ustedes agregan, los que piden en el chat y los recuerdos que salen solos de las conversaciones. Santa y los elfos los usan para que la conversación crezca día a día.
 
-## Voces de Fish Audio en conversaciones nuevas (Netlify)
+## Voces de Fish Audio en conversaciones nuevas (Cloudflare)
 
-Fish Audio no acepta llamadas desde el navegador, así que hace falta un puente pequeño. Ya está en `netlify/functions/tts.mjs`.
+Fish Audio no acepta llamadas desde el navegador, así que hace falta un puente pequeño. Está listo en `cloudflare/worker.js` y corre gratis en Cloudflare Workers.
 
-1. En Netlify: **Add new site → Import an existing project → GitHub** y escojan este repositorio. Netlify lee `netlify.toml` solo, sin comando de build.
-2. En **Site configuration → Environment variables** agreguen:
+1. En dash.cloudflare.com: **Workers & Pages → Create → Create Worker**. Pónganle de nombre `polonorte-voces` y toquen **Deploy**.
+2. Toquen **Edit code**, borren todo, peguen el contenido de `cloudflare/worker.js` y toquen **Deploy**.
+3. En el Worker: **Settings → Variables and Secrets → Add**, de tipo **Secret**:
    - `FISH_API_KEY`: la key de Fish Audio.
    - `ACCESS_TOKEN`: la clave del servidor, la misma que va en el panel.
-3. Hagan **Deploys → Trigger deploy** para que tome las variables.
-4. La dirección queda así: `https://<su-sitio>.netlify.app/.netlify/functions/tts`.
-5. En la página: **Papás → Ajustes → Voces de Fish Audio**, peguen la dirección y la clave, y toquen **Probar y guardar**. Santa habla para confirmar.
+4. La dirección queda así: `https://polonorte-voces.<su-subdominio>.workers.dev`. Al abrirla en el navegador dice "Puente de voces del Polo Norte funcionando".
+5. En la página: **Papás → Ajustes → Voces de Fish Audio**, peguen la dirección y la clave y toquen **Probar y guardar**. Santa habla para confirmar.
 
-La función solo acepta pedidos desde `lothra2.github.io` y con la clave correcta, así nadie más gasta sus créditos de Fish.
+El Worker solo acepta pedidos desde `lothra2.github.io` y con la clave correcta, así nadie más gasta sus créditos de Fish.
 
 ## Publicar en GitHub Pages
 

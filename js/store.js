@@ -34,7 +34,7 @@ function fresh() {
     profile: '', // lo que Santa sabe de la familia (solo en este dispositivo)
     memories: [], // {id, date, kid, text} recuerdos que salen de las conversaciones
     memCursor: { sophie: 0, alana: 0, both: 0 },
-    voiceServer: { url: '', token: '' }, // puente de voces Fish Audio (Netlify)
+    voiceServer: { url: '', token: '' }, // puente de voces Fish Audio (Cloudflare Worker)
   };
 }
 
