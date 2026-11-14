@@ -55,8 +55,9 @@ function elfScarf(st) {
   p.rect(ox + 9, 6, 18, 3, (x, y, i, j) => (j === 2 ? C.W : C.w));
   p.ell(ox + 27, 6, 5, 5, shade(C.w, C.W));
   // cara
+  const lk = st.look || 0;
   if (st.blink) { p.rect(ox + 14, 14, 2, 1, C.b); p.rect(ox + 20, 14, 2, 1, C.b); }
-  else { p.rect(ox + 14, 13, 2, 2, C.b); p.rect(ox + 20, 13, 2, 2, C.b); p.set(ox + 14, 13, C.B); p.set(ox + 20, 13, C.B); }
+  else { p.rect(ox + 14 + lk, 13, 2, 2, C.b); p.rect(ox + 20 + lk, 13, 2, 2, C.b); p.set(ox + 14 + lk, 13, C.B); p.set(ox + 20 + lk, 13, C.B); }
   p.rect(ox + 17, 15, 2, 2, C.n); p.set(ox + 18, 17, C.S);
   if (st.mouth) p.ell(ox + 16, 17, 4, st.mouth > 1 ? 3 : 2, C.R);
   if (st.cheeks !== false) { p.set(ox + 13, 16, C.P); p.set(ox + 23, 16, C.P); }
@@ -99,8 +100,9 @@ function elfStripe(st) {
   for (let i = 0; i < 9; i++) p.rect(ox + 24 + i, -1 + Math.round(i * 0.5) + 2, 2, 2, (i >> 1) % 2 ? C.w : C.r);
   p.ell(ox + 32, 5, 5, 5, shade(C.r, C.R, C.q));
   // cara
+  const lk = st.look || 0;
   if (st.blink) { p.rect(ox + 13, 16, 2, 1, C.b); p.rect(ox + 20, 16, 2, 1, C.b); }
-  else { p.rect(ox + 13, 15, 2, 2, C.b); p.rect(ox + 20, 15, 2, 2, C.b); }
+  else { p.rect(ox + 13 + lk, 15, 2, 2, C.b); p.rect(ox + 20 + lk, 15, 2, 2, C.b); }
   // nariz en espiral
   p.set(ox + 17, 17, C.b); p.set(ox + 18, 17, C.b); p.set(ox + 19, 18, C.b); p.set(ox + 18, 19, C.b); p.set(ox + 17, 19, C.b);
   // sonrisa
@@ -153,10 +155,11 @@ function elfGreen(st) {
   p.rect(ox + 9, 6, 19, 3, C.r);
   for (let x = 9; x < 28; x++) if (x % 3 === 1) p.set(ox + x, 5, C.r);
   // cara
+  const lk = st.look || 0;
   if (st.blink) { p.rect(ox + 13, 14, 3, 1, C.b); p.rect(ox + 21, 14, 3, 1, C.b); }
   else {
-    p.rect(ox + 13, 13, 3, 3, C.b); p.rect(ox + 21, 13, 3, 3, C.b);
-    p.set(ox + 13, 13, C.w); p.set(ox + 21, 13, C.w);
+    p.rect(ox + 13 + lk, 13, 3, 3, C.b); p.rect(ox + 21 + lk, 13, 3, 3, C.b);
+    p.set(ox + 13 + lk, 13, C.w); p.set(ox + 21 + lk, 13, C.w);
   }
   p.rect(ox + 11, 16, 2, 1, C.p); p.rect(ox + 25, 16, 2, 1, C.p);
   p.ell(ox + 17, 15, 3, 3, C.n); p.set(ox + 19, 17, C.S);
@@ -169,7 +172,7 @@ const ELF_DRAW = { scarf: elfScarf, stripe: elfStripe, green: elfGreen };
 export const ELF_IDS = ['scarf', 'stripe', 'green'];
 
 export function elf(id, st = {}) {
-  const key = `${id}|${st.blink ? 1 : 0}|${st.mouth || 0}|${st.aL ?? 'd'}|${st.aR ?? 'd'}|${st.legs || 0}`;
+  const key = `${id}|${st.blink ? 1 : 0}|${st.mouth || 0}|${st.aL ?? 'd'}|${st.aR ?? 'd'}|${st.legs || 0}|${st.look || 0}`;
   return cached(key, () => ELF_DRAW[id](st).pad(2, 0, 1, 0).toCanvas());
 }
 
@@ -665,5 +668,94 @@ export function smallStar(col = C.y) {
       '.yy...yy.',
     ], { y: col });
     return p.toCanvas(null);
+  });
+}
+
+/* ---------------- PINOS NAVIDEÑOS ----------------
+   Pino por capas con ramas caídas, luz y sombra, nieve en las puntas y tronco.
+   opts: { snow, deco (esferas y guirnalda), dark (silueta lejana) }
+   Devuelve { cv, lights: [{x,y}], top: {x,y} } para poner luces y estrella encima. */
+export function pine(h = 44, opts = {}) {
+  const { snow = true, deco = false, dark = false, seed = 1 } = opts;
+  const key = `pine|${h}|${snow}|${deco}|${dark}|${seed}`;
+  return cached(key, () => {
+    const w = Math.round(h * 0.78) + 4;
+    const p = new Pix(w, h + 4);
+    const cx = w / 2;
+    const pal = dark ? ['#1a3a4a', '#21485a', '#2a5a6c', '#163040'] : ['#1f6b3a', '#2a8a48', '#46b35c', '#154d2b'];
+    const [base, mid, hi, sh] = pal;
+    const trunkH = Math.max(3, Math.round(h * 0.1));
+    const tiers = h > 30 ? 4 : 3;
+    const crownH = h - trunkH;
+    const lights = [];
+    let rnd = seed * 9301 + 49297;
+    const rand = () => { rnd = (rnd * 9301 + 49297) % 233280; return rnd / 233280; };
+    // tronco
+    p.rect(Math.round(cx - 2), h - trunkH, 4, trunkH, (x) => (x > cx ? '#5a3420' : '#7a4a2c'));
+    for (let i = 0; i < tiers; i++) {
+      const t0 = Math.round(i * crownH / (tiers + 0.6));
+      const t1 = Math.round((i + 1.6) * crownH / (tiers + 0.6));
+      const wb = (w / 2 - 1) * (0.48 + 0.52 * (i + 1) / tiers);
+      for (let y = t0; y <= Math.min(t1, crownH); y++) {
+        const k = (y - t0) / Math.max(1, t1 - t0);
+        const half = 1 + (wb - 1) * Math.pow(k, 0.9);
+        for (let x = Math.floor(cx - half); x <= Math.ceil(cx + half); x++) {
+          const nx = (x + 0.5 - cx) / half;
+          if (Math.abs(nx) > 1) continue;
+          // borde de abajo con ramas caídas
+          if (k > 0.82 && ((x * 3 + i) % 5 === 0)) continue;
+          let c = mid;
+          if (nx < -0.45) c = hi; else if (nx > 0.4) c = sh; else if (nx > 0.05) c = base;
+          if ((x * 7 + y * 13 + i) % 11 === 0) c = sh;
+          if ((x * 5 + y * 3) % 17 === 0 && nx < 0) c = hi;
+          p.set(x, y, c);
+        }
+        // nieve: borde superior izquierdo de cada capa y puntitas de abajo
+        if (snow) {
+          const sx = Math.floor(cx - half);
+          if (k < 0.75) { p.set(sx, y, '#ffffff'); if (k < 0.4) p.set(sx + 1, y, '#e8f0ff'); }
+          if (k > 0.78 && k < 0.95) for (let x = Math.floor(cx - half); x < cx + half * 0.3; x++) if ((x + i * 2) % 5 < 2) p.set(x, y, (x + y) % 3 ? '#ffffff' : '#d6e2ff');
+        }
+      }
+      // lugares para luces y esferas
+      for (let j = 0; j < 3 + i; j++) {
+        const y = Math.round(t0 + (t1 - t0) * (0.55 + rand() * 0.3));
+        const k = (y - t0) / Math.max(1, t1 - t0);
+        const half = 1 + (wb - 1) * k;
+        const x = Math.round(cx + (rand() * 2 - 1) * half * 0.75);
+        if (y < crownH - 1) lights.push({ x, y });
+      }
+    }
+    if (snow) { p.set(Math.round(cx) - 1, 0, '#ffffff'); p.set(Math.round(cx), 0, '#ffffff'); p.set(Math.round(cx), 1, '#e8f0ff'); }
+    if (deco) {
+      // guirnalda dorada en diagonal y esferas con brillo
+      for (let i = 0; i < tiers; i++) {
+        const y0 = Math.round((i + 0.9) * crownH / (tiers + 0.6));
+        for (let x = 0; x < w; x++) {
+          const y = Math.round(y0 + (x - cx) * 0.35);
+          if (p.get(x, y) && p.get(x, y) !== '#ffffff') p.set(x, y, (x % 3) ? '#ffd23f' : '#fff3a0');
+        }
+      }
+      const cols = [['#e03a3a', '#ff8a8a'], ['#4a8ad8', '#9ad8ff'], ['#ffd23f', '#fff3a0'], ['#9a5cd8', '#d6b0ff'], ['#f06aa0', '#ffc4dc']];
+      lights.forEach((l, n) => {
+        if (n % 2) return;
+        const [c, hl] = cols[n % cols.length];
+        p.rect(l.x, l.y, 2, 2, c); p.set(l.x, l.y, hl);
+      });
+    }
+    // montoncito de nieve al pie
+    if (snow && !dark) { p.ell(cx - w * 0.36, h - 1, w * 0.72, 4, (x, y, nx, ny) => (ny < 0 ? '#ffffff' : '#d6e2ff')); }
+    return { cv: p.pad(1, 1, 1, 1).toCanvas(dark ? '#0d1830' : '#123020'), lights: lights.filter((_, n) => !deco || n % 2).map((l) => ({ x: l.x + 1, y: l.y + 1 })), top: { x: Math.round(cx) + 1, y: 1 } };
+  });
+}
+
+// Estrella dorada para la punta del árbol
+export function treeStar(glow = 0) {
+  return cached(`tstar|${glow}`, () => {
+    const p = new Pix(13, 13);
+    const pts = []; for (let i = 0; i < 10; i++) { const a = (-90 + i * 36) * Math.PI / 180, r = i % 2 ? 2.6 : 6; pts.push([6.5 + Math.cos(a) * r, 6.8 + Math.sin(a) * r]); }
+    for (let i = 0; i < 10; i++) p.tri(6.5, 6.8, ...pts[i], ...pts[(i + 1) % 10], i < 4 ? '#fff3a0' : '#ffd23f');
+    if (glow) { p.set(6, 3, '#ffffff'); p.set(5, 5, '#ffffff'); }
+    return p.toCanvas('#a86a10');
   });
 }

@@ -4,7 +4,7 @@ import * as A from './audio.js';
 import { initSky, trigger as skyFx, confettiBurst } from './sky.js';
 import { Workshop } from './workshop.js';
 import { ElfActor, SantaActor } from './actors.js';
-import { elf, phone, icon, bigIcon, gift, smallStar, ELF_IDS } from './sprites.js';
+import { elf, phone, icon, bigIcon, gift, smallStar, ELF_IDS, pine, treeStar } from './sprites.js';
 import { toURL } from './pix.js';
 import { dayContent, TAP_LINES } from './content.js';
 import { elfReply, elfGreeting, santaMessage, hasKimi, testKimi, extractMemories, serverStatus, transcribe, serverReady } from './brain.js';
@@ -373,7 +373,7 @@ ENTER.hub = async () => {
   applyTexts(); tickCountdown();
   paintIcons($('#scr-hub'));
   if (!A.currentSong() || A.currentSong() === 'silent') A.playSong(Math.random() < 0.5 ? 'jingle' : 'deck', { vol: 0.7 });
-  if (!workshop) workshop = new Workshop($('#workshop-cv'), { onTap: hubTap });
+  if (!workshop) { workshop = new Workshop($('#workshop-cv'), { onTap: hubTap }); workshop.onMove = moveTags; }
   workshop.start();
   requestAnimationFrame(() => { workshop.resize(); placeTags(); });
   leaveHooks.hub = () => workshop.stop();
@@ -387,9 +387,12 @@ ENTER.hub = async () => {
     else if (!ENTER.hub.greeted) { ENTER.hub.greeted = true; const id = ELF_IDS[Math.floor(Math.random() * 3)]; hubSay(id, lang() === 'es' ? `¡Hola, ${kidNames(S().kid)}! Toca a un elfo.` : `Hi, ${kidNames(S().kid)}! Tap an elf.`); }
   }
 };
+function moveTags() {
+  $$('#elf-tags .elf-tag').forEach((el) => { const p = workshop.elfScreenPos(el.dataset.id); el.style.left = (p.x * 100) + '%'; });
+}
 function placeTags() {
   const box = $('#elf-tags');
-  box.innerHTML = ELF_IDS.map((id) => { const p = workshop.elfScreenPos(id); return `<div class="elf-tag" style="left:${p.x * 100}%;top:${p.y * 100}%">${esc(elfName(id))}</div>`; }).join('');
+  box.innerHTML = ELF_IDS.map((id) => { const p = workshop.elfScreenPos(id); return `<div class="elf-tag" data-id="${id}" style="left:${p.x * 100}%;top:${p.y * 100}%">${esc(elfName(id))}</div>`; }).join('');
 }
 async function hubSay(id, text) {
   if (!workshop) return;
@@ -404,9 +407,9 @@ function hubTap(what) {
   A.unlock();
   if (ELF_IDS.includes(what)) {
     const a = workshop.elves[what];
-    const fav = { scarf: ['shiver', 'wave', 'dance'], stripe: ['flip', 'dance', 'hop'], green: ['cheer', 'wave', 'hop'] }[what];
+    const fav = { scarf: ['shiver', 'wave', 'dance', 'clap'], stripe: ['flip', 'dance', 'spin', 'hop'], green: ['cheer', 'clap', 'spin', 'wave'] }[what];
     const act = fav[Math.floor(Math.random() * fav.length)];
-    a.do(act); a.heart();
+    a.do(act); a.heart(); a.sparkle();
     act === 'flip' || act === 'hop' ? A.sfx.hop() : act === 'shiver' ? A.sfx.whoosh() : A.sfx.jingle();
     if (act === 'shiver') workshop.burst(a.x, a.y - 50, '#9ad8ff');
     const line = TAP_LINES[lang()][Math.floor(Math.random() * TAP_LINES[lang()].length)].replace('{days}', daysLeft()).replace('{kid}', kidLabel(S().kid));
@@ -475,14 +478,16 @@ function startChatStage() {
   g0.fillStyle = '#a0663a'; g0.fillRect(0, 56, W, 8); g0.fillStyle = '#7a4a2a'; g0.fillRect(0, 56, W, 1);
   // ventanita y árbol
   g0.fillStyle = '#3b1f12'; g0.fillRect(14, 10, 30, 26); g0.fillStyle = '#1a1f5a'; g0.fillRect(16, 12, 26, 22); g0.fillStyle = '#fff6d6'; g0.fillRect(34, 15, 4, 4);
-  for (let j = 0; j < 34; j++) { const w = 4 + (j % 11) * 1.4 + j * 0.3; g0.fillStyle = j % 11 < 2 ? '#3fa84a' : '#2a8a40'; g0.fillRect(Math.round(166 - w / 2), 20 + j, Math.round(w), 1); }
-  g0.fillStyle = '#ffd23f'; g0.fillRect(164, 16, 5, 5);
+  const ctree = pine(40, { deco: true, snow: false, seed: 21 });
+  const ctx0 = 166 - Math.round(ctree.cv.width / 2), cty0 = 57 - ctree.cv.height;
+  g0.drawImage(ctree.cv, ctx0, cty0); g0.drawImage(treeStar(1), ctx0 + ctree.top.x - 6, cty0 + ctree.top.y - 8);
+  const chatLights = ctree.lights.map((l, i) => ({ x: ctx0 + l.x, y: cty0 + l.y, c: ['#ff4a4a', '#ffd23f', '#5ad8ff', '#7dff7a'][i % 4], ph: i }));
   const frame = (now) => {
     if (!chatAlive) return;
     const dt = Math.min(0.1, (now - last) / 1000); last = now;
     const g = st.b; g.drawImage(bg, 0, 0);
     const tt = now / 1000;
-    for (let i = 0; i < 8; i++) { g.fillStyle = Math.sin(tt * 3 + i) > 0 ? ['#ff4a4a', '#ffd23f', '#5ad8ff', '#7dff7a'][i % 4] : '#26502e'; g.fillRect(160 + ((i * 5) % 12), 26 + i * 3.5, 2, 2); }
+    for (const l of chatLights) { if (Math.sin(tt * 3 - l.y * 0.3 + l.ph) > -0.2) { g.fillStyle = l.c; g.fillRect(l.x, l.y, 2, 2); } }
     g.fillStyle = '#fff'; for (let i = 0; i < 6; i++) g.fillRect(17 + ((i * 7 + Math.floor(tt * 8)) % 24), 13 + ((i * 11 + Math.floor(tt * 10)) % 20), 1, 1);
     chatActor.update(dt); chatActor.draw(g);
     st.c.imageSmoothingEnabled = false; st.c.drawImage(st.buf, 0, 0, cv.width, cv.height);

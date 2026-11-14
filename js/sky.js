@@ -1,11 +1,11 @@
 // Cielo del Polo Norte: auroras, estrellas, luna, aldea, nieve y eventos mágicos.
-import { reindeer, sleigh, smallStar } from './sprites.js';
+import { reindeer, sleigh, smallStar, pine } from './sprites.js';
 import { PAL as C } from './pix.js';
 
 const SKY = ['#070a24', '#0d1338', '#16194a', '#221c5c', '#30226a', '#3e2a74'];
 let cv, x, W, H, scale;
 let skyLayer, groundLayer;
-let stars = [], flakes = [], parts = [], events = [], windows = [];
+let stars = [], flakes = [], parts = [], events = [], windows = [], treeLights = [];
 let t0 = performance.now(), last = 0;
 let snowBoost = 0, auroraBoost = 0;
 let running = true;
@@ -49,14 +49,11 @@ function makeLayers() {
   // colina media
   g.fillStyle = '#3c4796';
   for (let xx = 0; xx < W; xx++) g.fillRect(xx, Math.round(base - 6 + Math.sin(xx * 0.03 + 1) * 5), 1, H);
-  // pinos lejanos
-  for (let i = 0; i < W / 9; i++) {
-    const px = Math.round(rnd(0, W)), py = Math.round(base - 4 + Math.sin(px * 0.03 + 1) * 5), hgt = Math.round(rnd(8, 15));
-    for (let j = 0; j < hgt; j++) {
-      const w = Math.max(1, Math.round((j / hgt) * 6));
-      g.fillStyle = j % 4 === 0 ? '#e8f0ff' : '#1d4a4a';
-      g.fillRect(px - (w >> 1), py - hgt + j, w, 1);
-    }
+  // pinos lejanos (siluetas azuladas con nieve)
+  for (let i = 0; i < W / 11; i++) {
+    const px = Math.round(rnd(0, W)), py = Math.round(base - 2 + Math.sin(px * 0.03 + 1) * 5);
+    const t = pine(Math.round(rnd(10, 17)), { dark: true, seed: i + 1 });
+    g.drawImage(t.cv, Math.round(px - t.cv.width / 2), py - t.cv.height + 2);
   }
   // casitas con ventanas
   windows = [];
@@ -85,16 +82,16 @@ function makeLayers() {
   const px = Math.round(W * 0.78), py = Math.round(base + 4 + Math.sin(px * 0.045) * 3);
   for (let j = 0; j < 24; j++) { g.fillStyle = (j >> 1) % 2 ? '#e03a3a' : '#fdf9f0'; g.fillRect(px, py - j, 2, 1); }
   g.fillStyle = '#ffd23f'; g.fillRect(px - 1, py - 26, 4, 2);
-  // pinos del frente
-  for (let i = 0; i < 4; i++) {
-    const tx = Math.round(i % 2 ? rnd(W * 0.02, W * 0.2) : rnd(W * 0.85, W * 0.98)), ty = H - Math.round(rnd(2, 8)), hgt = Math.round(rnd(22, 32));
-    for (let j = 0; j < hgt; j++) {
-      const w = Math.max(1, Math.round(((j % 8) / 8 + j / hgt) * 7));
-      g.fillStyle = j % 8 < 2 ? '#f0f5ff' : j % 8 < 4 ? '#2d7a52' : '#1f5c3f';
-      g.fillRect(tx - (w >> 1), ty - hgt + j, w, 1);
-    }
-    g.fillStyle = '#4a2a22'; g.fillRect(tx - 1, ty, 2, 3);
-  }
+  // pinos del frente, grandes y nevados; dos con luces de colores que titilan
+  treeLights = [];
+  const spots = [[0.06, 40, 0], [0.17, 28, 1], [0.86, 44, 2], [0.95, 30, 0], [0.3, 18, 1], [0.7, 20, 2]];
+  spots.forEach(([fx, hgt, seedOff], i) => {
+    const sc = Math.max(0.7, Math.min(1.25, H / 210));
+    const t = pine(Math.round(hgt * sc), { seed: i + 7 + seedOff });
+    const tx = Math.round(W * fx - t.cv.width / 2), ty = H - t.cv.height + Math.round(rnd(2, 6));
+    g.drawImage(t.cv, tx, ty);
+    if (i === 0 || i === 2) t.lights.forEach((l, n) => treeLights.push({ x: tx + l.x, y: ty + l.y, c: ['#ff4a4a', '#ffd23f', '#5ad8ff', '#ff8ad8', '#7dff7a'][n % 5], ph: n * 1.7 }));
+  });
 }
 
 function setup() {
@@ -110,7 +107,8 @@ function setup() {
 }
 
 function newFlake(any) {
-  return { x: rnd(-10, W + 10), y: any ? rnd(-H, H) : rnd(-20, -2), vy: rnd(6, 16), vx: rnd(-3, 3), ph: rnd(0, 6), big: Math.random() < 0.25 };
+  const layer = Math.random() < 0.5 ? 0 : Math.random() < 0.7 ? 1 : 2; // lejos, medio, cerca
+  return { x: rnd(-10, W + 10), y: any ? rnd(-H, H) : rnd(-20, -2), vy: [5, 11, 20][layer] * rnd(0.8, 1.2), vx: rnd(-3, 3), ph: rnd(0, 6), layer };
 }
 
 export function initSky(canvas) {
@@ -158,21 +156,26 @@ function loop(now) {
     }
   }
 
-  // auroras
+  // auroras: dos cortinas con rayos verticales, verde abajo y violeta arriba
   auroraBoost = Math.max(0, auroraBoost - dt);
-  const aStrength = 0.55 + Math.min(1, auroraBoost / 4) * 0.45;
-  for (let xx = 0; xx < W; xx++) {
-    const yc = H * 0.2 + Math.sin(xx * 0.04 + t * 0.35) * 8 + Math.sin(xx * 0.11 - t * 0.6) * 3;
-    const len = 14 + Math.sin(xx * 0.07 + t * 0.5) * 8 + auroraBoost * 1.5;
-    const k = (Math.sin(xx * 0.025 - t * 0.25) + 1) / 2;
-    for (let j = 0; j < len; j++) {
-      const a = (1 - j / len) * aStrength;
-      if (a < 0.08) continue;
-      const streak = (Math.sin(xx * 0.9 + t * 0.8) + Math.sin(xx * 0.37)) * 0.5;
-      const q = (a > 0.55 ? 0.42 : a > 0.3 ? 0.24 : 0.11) * (0.55 + streak * 0.45);
-      if (q < 0.05) continue;
-      x.fillStyle = k > 0.82 ? `rgba(230,120,230,${q})` : k > 0.3 ? `rgba(90,240,170,${q})` : `rgba(80,210,240,${q})`;
-      x.fillRect(xx, Math.round(yc + j - 2), 1, 1);
+  const aStrength = 0.6 + Math.min(1, auroraBoost / 4) * 0.4;
+  for (let layer = 0; layer < 2; layer++) {
+    const sp = layer ? 0.22 : 0.35, off = layer ? 2.1 : 0, yb = H * (layer ? 0.15 : 0.22);
+    for (let xx = 0; xx < W; xx++) {
+      const yc = yb + Math.sin(xx * 0.035 + t * sp + off) * 9 + Math.sin(xx * 0.09 - t * 0.5 + off) * 3;
+      const ray = 0.55 + 0.45 * Math.sin(xx * 0.7 + t * 0.9 + off) * Math.sin(xx * 0.13 + t * 0.3);
+      const len = (16 + Math.sin(xx * 0.05 + t * 0.4 + off) * 8) * (0.7 + ray * 0.6) + auroraBoost * 1.5;
+      for (let j = 0; j < len; j++) {
+        const k = j / len;
+        let a = (1 - k) * ray * aStrength * (layer ? 0.6 : 1);
+        if ((xx + j) % 2 === 1) a *= 0.75; // tramado
+        if (a < 0.07) continue;
+        const q = (a > 0.5 ? 0.42 : a > 0.28 ? 0.25 : 0.12);
+        const col = k < 0.45 ? `rgba(80,245,170,${q})` : k < 0.75 ? `rgba(90,210,235,${q})` : `rgba(200,120,240,${q})`;
+        x.fillStyle = col; x.fillRect(xx, Math.round(yc - j), 1, 1);
+      }
+      // borde inferior brillante
+      if (ray > 0.6) { x.fillStyle = `rgba(190,255,220,${0.35 * aStrength * (layer ? 0.6 : 1)})`; x.fillRect(xx, Math.round(yc), 1, 1); }
     }
   }
 
@@ -215,8 +218,16 @@ function loop(now) {
   });
 
   x.drawImage(groundLayer, 0, 0);
+  // luces de los árboles del frente
+  for (const l of treeLights) {
+    const on = Math.sin(t * 2.6 + l.ph) > -0.25;
+    if (!on) continue;
+    x.fillStyle = l.c; x.fillRect(l.x, l.y, 1, 1);
+    if (Math.sin(t * 2.6 + l.ph) > 0.7) { x.globalAlpha = 0.35; x.fillRect(l.x - 1, l.y, 3, 1); x.fillRect(l.x, l.y - 1, 1, 3); x.globalAlpha = 1; }
+  }
   // ventanas que titilan
   for (const w of windows) {
+    x.fillStyle = 'rgba(255,200,90,0.16)'; x.fillRect(w.x - 2, w.y - 2, 7, 7);
     const b = Math.sin(t * 2 + w.ph) > -0.6;
     x.fillStyle = b ? '#ffd86b' : '#e8a640'; x.fillRect(w.x, w.y, 3, 3);
     x.fillStyle = '#5a3420'; x.fillRect(w.x + 1, w.y, 1, 3); x.fillRect(w.x, w.y + 1, 3, 1);
@@ -243,8 +254,10 @@ function loop(now) {
   for (const f of flakes) {
     f.y += f.vy * dt * extra; f.x += (f.vx + Math.sin(t + f.ph) * 4) * dt * extra;
     if (f.y > H + 2 || f.x < -12 || f.x > W + 12) Object.assign(f, newFlake(false));
-    x.fillStyle = f.big ? '#ffffff' : '#c6d2ff';
-    x.fillRect(Math.round(f.x), Math.round(f.y), f.big ? 2 : 1, f.big ? 2 : 1);
+    const fx = Math.round(f.x), fy = Math.round(f.y);
+    if (f.layer === 0) { x.fillStyle = '#8f9ad8'; x.fillRect(fx, fy, 1, 1); }
+    else if (f.layer === 1) { x.fillStyle = '#dfe6ff'; x.fillRect(fx, fy, 1, 1); }
+    else { x.fillStyle = '#ffffff'; x.fillRect(fx, fy, 2, 2); x.fillStyle = 'rgba(255,255,255,0.45)'; x.fillRect(fx - 1, fy, 1, 2); x.fillRect(fx + 2, fy, 1, 2); x.fillRect(fx, fy - 1, 2, 1); x.fillRect(fx, fy + 2, 2, 1); }
   }
   if (snowBoost > 0 && Math.random() < 0.8) for (let i = 0; i < 3; i++) flakes.push(newFlake(false));
   if (flakes.length > (W * H) / 120 && snowBoost <= 0) flakes.splice(0, 2);

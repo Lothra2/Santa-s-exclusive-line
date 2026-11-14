@@ -1,8 +1,9 @@
 // El taller de Santa: ventana con nieve, árbol con luces, chimenea, lista de los buenos y los 3 elfos.
 import { ElfActor } from './actors.js';
-import { gift } from './sprites.js';
+import { gift, pine, treeStar } from './sprites.js';
 
 export const WW = 192, WH = 128;
+const TREE = { ox: 0, oy: 0, lights: [], top: { x: 0, y: 0 } };
 const rnd = (a, b) => a + Math.random() * (b - a);
 
 function drawStatic() {
@@ -79,16 +80,11 @@ function drawStatic() {
   stock(178, '#43b047', '#fdf9f0', '');
 
   // árbol de Navidad (izquierda abajo)
-  const tx = 28, ty = 58;
-  for (let j = 0; j < 46; j++) {
-    const tier = j % 15;
-    const w = Math.round(6 + tier * 1.6 + j * 0.45);
-    R(tx - (w >> 1), ty + j, w, 1, tier < 2 ? '#3fa84a' : (j % 3 === 0 ? '#1f6b34' : '#2a8a40'));
-    R(tx + (w >> 1) - 3, ty + j, 3, 1, '#1a5a2c');
-  }
-  R(tx - 3, ty + 46, 6, 5, '#6e3f26'); R(tx - 6, ty + 50, 12, 4, '#c0392b'); R(tx - 6, ty + 50, 12, 1, '#ffd23f');
-  // guirnalda dorada en el árbol
-  for (let j = 0; j < 40; j += 1) { const x = tx - 14 + ((j * 13) % 28); if (j % 10 < 5) R(Math.round(tx + Math.sin(j * 0.6) * (4 + j * 0.4)), ty + 6 + j, 1, 1, '#ffd23f'); }
+  const tree = pine(54, { deco: true, snow: false, seed: 11 });
+  g.drawImage(tree.cv, 28 - Math.round(tree.cv.width / 2), 106 - tree.cv.height);
+  TREE.ox = 28 - Math.round(tree.cv.width / 2); TREE.oy = 106 - tree.cv.height; TREE.lights = tree.lights; TREE.top = tree.top;
+  // macetero
+  R(20, 100, 16, 7, '#b0303a'); R(20, 100, 16, 1, '#ffd23f'); R(20, 104, 16, 1, '#ffd23f'); R(34, 100, 2, 7, '#7e1622');
 
   // regalos al pie del árbol
   g.drawImage(gift(0), 36, 92); g.drawImage(gift(2), 4, 96); g.drawImage(gift(3), 50, 98);
@@ -101,12 +97,13 @@ export class Workshop {
     this.buf = document.createElement('canvas'); this.buf.width = WW; this.buf.height = WH;
     this.b = this.buf.getContext('2d');
     this.bg = drawStatic();
-    this.elves = { scarf: new ElfActor('scarf', 66, 112), stripe: new ElfActor('stripe', 100, 113), green: new ElfActor('green', 134, 112) };
+    this.elves = { scarf: new ElfActor('scarf', 70, 112), stripe: new ElfActor('stripe', 100, 113), green: new ElfActor('green', 130, 112) };
+    Object.values(this.elves).forEach((e) => (e.wander = 8));
     this.onTap = onTap;
     this.t = 0; this.last = performance.now(); this.running = false;
     this.winSnow = Array.from({ length: 22 }, () => ({ x: rnd(10, 48), y: rnd(16, 52), v: rnd(4, 9) }));
     this.sparks = [];
-    this.treeLights = Array.from({ length: 16 }, (_, i) => ({ x: Math.round(28 + Math.sin(i * 2.4) * (3 + i * 1.1)), y: 62 + i * 2.6, c: ['#ff4a4a', '#ffd23f', '#5ad8ff', '#ff8ad8', '#7dff7a'][i % 5], ph: i }));
+    this.treeLights = TREE.lights.map((l, i) => ({ x: TREE.ox + l.x, y: TREE.oy + l.y, c: ['#ff4a4a', '#ffd23f', '#5ad8ff', '#ff8ad8', '#7dff7a'][i % 5], ph: i }));
     canvas.addEventListener('pointerdown', (e) => this.tap(e));
     this.resize();
     addEventListener('resize', () => this.resize());
@@ -153,15 +150,18 @@ export class Workshop {
       g.fillRect(x, y + 2, 2, 3);
       if (on) { g.fillStyle = 'rgba(255,240,180,0.25)'; g.fillRect(x - 1, y + 1, 4, 5); }
     }
-    // luces del árbol y estrella
+    // luces del árbol (se encienden en ola) y estrella con brillo
     for (const l of this.treeLights) {
-      const on = Math.sin(t * 3 + l.ph * 1.7) > -0.2;
-      g.fillStyle = on ? l.c : '#26502e'; g.fillRect(l.x, Math.round(l.y), 2, 2);
-      if (on) { g.fillStyle = 'rgba(255,255,255,0.7)'; g.fillRect(l.x, Math.round(l.y), 1, 1); }
+      const v = Math.sin(t * 3 - l.y * 0.25 + l.ph * 0.4);
+      if (v < -0.3) continue;
+      g.fillStyle = l.c; g.fillRect(l.x, Math.round(l.y), 2, 2);
+      g.fillStyle = 'rgba(255,255,255,0.8)'; g.fillRect(l.x, Math.round(l.y), 1, 1);
+      if (v > 0.75) { g.globalAlpha = 0.3; g.fillStyle = l.c; g.fillRect(l.x - 1, Math.round(l.y) - 1, 4, 4); g.globalAlpha = 1; }
     }
-    const sb = Math.sin(t * 4) > 0;
-    g.fillStyle = '#ffd23f'; g.fillRect(26, 52, 5, 5); g.fillRect(28, 50, 1, 9); g.fillRect(24, 54, 9, 1);
-    if (sb) { g.fillStyle = '#fff6b0'; g.fillRect(28, 53, 1, 3); g.fillRect(27, 54, 3, 1); g.fillStyle = 'rgba(255,230,120,0.35)'; g.fillRect(22, 48, 13, 13); }
+    const glow = 0.25 + 0.15 * Math.sin(t * 3);
+    g.fillStyle = `rgba(255,230,120,${glow})`; g.beginPath(); g.arc(TREE.ox + TREE.top.x, TREE.oy + TREE.top.y, 9 + Math.sin(t * 3) * 1.5, 0, 7); g.fill();
+    const st = treeStar(Math.sin(t * 4) > 0.3 ? 1 : 0);
+    g.drawImage(st, TREE.ox + TREE.top.x - 6, TREE.oy + TREE.top.y - 8);
     // fuego
     for (let i = 0; i < 22; i++) {
       const x = 160 + ((i * 7) % 20), h = 6 + Math.abs(Math.sin(t * 9 + i * 1.3)) * 14;
@@ -171,7 +171,9 @@ export class Workshop {
     // brillos de la lista
     if (Math.floor(t * 1.5) % 4 === 0) { g.fillStyle = '#fff6b0'; g.fillRect(110, 17, 1, 3); g.fillRect(109, 18, 3, 1); }
     // elfos (de atrás hacia adelante)
-    for (const a of Object.values(this.elves)) { a.update(dt); a.draw(g); }
+    // de atrás hacia adelante según su posición, y avisamos para mover las etiquetas
+    for (const a of Object.values(this.elves).sort((p, q) => p.y - q.y)) { a.update(dt); a.draw(g); }
+    if (this.onMove) this.onMove();
     // chispas
     this.sparks = this.sparks.filter((s) => { s.life -= dt; s.x += s.vx * dt; s.y += s.vy * dt; s.vy += 40 * dt; g.fillStyle = s.col; g.fillRect(Math.round(s.x), Math.round(s.y), 1, 1); return s.life > 0; });
     // al canvas visible

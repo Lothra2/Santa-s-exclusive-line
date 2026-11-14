@@ -425,3 +425,107 @@ select.pix-input { appearance: none; -webkit-appearance: none; }
 @keyframes sig { 50% { opacity: .25; } }
 
 .call-status[data-level]::after { content: attr(data-level); display: block; font-size: 12px; letter-spacing: 2px; color: #fff3a0; margin-top: 2px; }
+
+/* ===== Todo visible en cualquier pantalla ===== */
+.screen { overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+.screen::-webkit-scrollbar { display: none; }
+.screen > * { flex-shrink: 0; }
+.screen > .chat-log, .screen > .cal-grid, .screen > .stars-list, .screen > .letter, .screen > .menu { flex-shrink: 1; }
+.gate-dialog { min-height: 0; }
+.gate-dialog .dialog-text { font-size: clamp(16px, 4.3vw, 21px); }
+@media (max-height: 700px) {
+  #scr-gate { gap: 6px; }
+  .gate-pad { gap: 6px; }
+  .gate-dialog { padding: 10px 12px; }
+}
+/* iPad o teléfono acostado: dos columnas */
+@media (orientation: landscape) and (min-width: 700px) {
+  #app, #topbar { max-width: 1120px; }
+  #scr-gate.active { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); grid-template-rows: auto auto 1fr; column-gap: 22px; row-gap: 12px; align-content: center; }
+  #scr-gate .title { grid-column: 1 / -1; }
+  #scr-gate #gate-cv { grid-column: 1; grid-row: 2; }
+  #scr-gate .gate-dialog { grid-column: 1; grid-row: 3; align-self: start; }
+  #scr-gate .gate-slots { grid-column: 2; grid-row: 2; align-self: end; }
+  #scr-gate .gate-pad, #scr-gate .gate-start { grid-column: 2; grid-row: 3; align-self: start; }
+  #scr-hub.active { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); grid-template-rows: auto 1fr auto; column-gap: 18px; row-gap: 12px; align-content: start; }
+  #scr-hub .countdown { grid-column: 1 / -1; }
+  #scr-hub .workshop-wrap { grid-column: 1; grid-row: 2; align-self: start; }
+  #scr-hub .menu { grid-column: 2; grid-row: 2; align-content: start; }
+  #scr-hub .hub-foot { grid-column: 1 / -1; }
+  #scr-chat.active { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); grid-template-rows: auto auto 1fr auto auto; column-gap: 18px; }
+  #scr-chat .chat-mode, #scr-chat .chat-tabs { grid-column: 1; }
+  #scr-chat .chat-stage { grid-column: 1; grid-row: 3; max-height: none; align-self: start; }
+  #scr-chat .chat-log { grid-column: 2; grid-row: 1 / 4; }
+  #scr-chat .call-status, #scr-chat #chat-quick, #scr-chat .chat-input { grid-column: 2; }
+  #scr-santa.active { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: 1fr auto; column-gap: 18px; }
+  #scr-santa .santa-stage { grid-column: 1; grid-row: 1 / 3; align-self: center; }
+  #scr-santa .letter { grid-column: 2; grid-row: 1; margin-top: 0; }
+  #scr-santa #santa-actions { grid-column: 2; grid-row: 2; }
+}
+
+/* ================= Acabado premium ================= */
+:root { --gold-frame: inset 0 0 0 3px #c99a1c, inset 0 0 0 5px #fff3a0, inset 0 0 0 7px #c99a1c; }
+
+/* Títulos como cinta navideña */
+.title {
+  position: relative; align-self: center; margin: 6px auto 2px; padding: 12px 34px 10px;
+  background: linear-gradient(#e64545, #b8232f); color: #ffe27a;
+  clip-path: polygon(0 0, 100% 0, calc(100% - 14px) 50%, 100% 100%, 0 100%, 14px 50%);
+  text-shadow: 2px 2px 0 #6e0f18, 4px 4px 0 rgba(0,0,0,.35);
+  box-shadow: inset 0 3px 0 rgba(255,255,255,.25), inset 0 -4px 0 rgba(0,0,0,.25);
+}
+
+/* Escenarios con marco dorado */
+.stage { outline: 4px solid #c99a1c; outline-offset: -4px; box-shadow: 0 8px 0 rgba(0,0,0,.25); }
+.workshop-wrap::after { box-shadow: inset 0 0 0 3px #c99a1c, inset 0 0 0 5px #fff3a0, inset 0 0 0 7px #8a5a10; }
+
+/* Cajas de texto y tarjetas con borde dorado */
+.dialog, .modal-box, .panel {
+  background: linear-gradient(#fffaf0, #fff1d6);
+  box-shadow: var(--gold-frame), inset -6px -8px 0 rgba(201,154,28,.18), 0 8px 0 rgba(0,0,0,.25);
+}
+.dialog { padding: 16px 18px; }
+.letter { box-shadow: inset 0 0 0 4px #d9b97a, inset 0 0 0 7px #fff0c8, inset 0 0 0 9px #c99a1c, inset 0 0 40px rgba(201,154,28,.25); }
+
+/* Menú principal: tarjetas con brillo que pasa */
+.menu-btn {
+  overflow: hidden; background: linear-gradient(#fffaf0, #fbe8c0);
+  box-shadow: var(--gold-frame), inset -6px -8px 0 rgba(201,154,28,.22), 0 6px 0 rgba(0,0,0,.28);
+}
+.menu-btn::before {
+  content: ''; position: absolute; top: -20%; bottom: -20%; width: 30%; left: -50%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.65), transparent); transform: skewX(-20deg);
+  animation: shine 5.5s ease-in-out infinite;
+}
+.menu-btn:nth-child(2)::before { animation-delay: 1.2s; } .menu-btn:nth-child(3)::before { animation-delay: 2.4s; } .menu-btn:nth-child(4)::before { animation-delay: 3.6s; }
+@keyframes shine { 0%, 70% { left: -50%; } 100% { left: 130%; } }
+.menu-btn canvas { filter: drop-shadow(0 4px 0 rgba(0,0,0,.18)) drop-shadow(0 0 10px rgba(255,210,63,.55)); }
+.menu-btn span { position: relative; }
+
+/* Botones con brillo superior */
+.pix-btn, .chip, .gate-pad button, .pinpad button, .who-card { position: relative; overflow: hidden; }
+.pix-btn::after, .gate-pad button::after, .who-card::after {
+  content: ''; position: absolute; left: 6px; right: 6px; top: 5px; height: 4px; background: rgba(255,255,255,.35); pointer-events: none;
+}
+
+/* Cuenta regresiva de terciopelo con borde dorado */
+.countdown { background: linear-gradient(#d13a3f, #8f1a25); box-shadow: inset 0 0 0 3px #c99a1c, inset 0 0 0 5px #ffe27a, inset 0 0 0 7px #c99a1c, 0 8px 0 rgba(0,0,0,.25); }
+.cd-clock span { box-shadow: inset 0 -4px 0 #e6d3a8, 0 3px 0 rgba(0,0,0,.25); }
+
+/* Barra superior tipo cristal */
+.tb-count { background: rgba(7,10,36,.55); padding: 8px 10px; clip-path: var(--corner); }
+
+/* Tarjetas de quién llama con brillo */
+.who-card { box-shadow: inset 0 0 0 3px rgba(255,255,255,.55), inset -6px -8px 0 rgba(0,0,0,.25), 0 8px 0 rgba(0,0,0,.28); }
+.who-card::before { content: '✦'; position: absolute; top: 10px; right: 14px; color: #fff3a0; font-size: 18px; animation: blink 1.4s steps(2) infinite; }
+
+/* Mensajes del chat */
+.msg.elf { background: linear-gradient(#fffaf0, #fff1d6); box-shadow: inset 0 0 0 2px #e6c77a, inset -3px -4px 0 rgba(201,154,28,.25); }
+.msg.kid { box-shadow: inset 0 0 0 2px rgba(255,255,255,.35), inset -3px -4px 0 rgba(0,0,0,.2); }
+
+/* Celdas del calendario */
+.cal-cell { box-shadow: inset 0 0 0 2px #e6c77a, inset -3px -4px 0 rgba(201,154,28,.25); }
+.cal-cell.today { box-shadow: inset 0 0 0 3px #fff3a0, inset -3px -4px 0 var(--gold2), 0 0 18px rgba(255,210,63,.6); }
+.toast { white-space: normal; text-align: center; width: max-content; max-width: min(92vw, 560px); line-height: 1.3; }
+.cal-cell.future { background: rgba(58, 66, 118, .92); box-shadow: inset 0 0 0 2px rgba(160,170,220,.45), inset -3px -4px 0 rgba(0,0,0,.25); }
+.cal-cell.future .d, .cal-cell.future .wd { color: #c9d0f5; }
