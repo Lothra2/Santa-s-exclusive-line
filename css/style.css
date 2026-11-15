@@ -566,3 +566,11 @@ select.pix-input { appearance: none; -webkit-appearance: none; }
 .away-dot.flash .ico { transform: scale(1.6); }
 
 .away-dot { touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; z-index: 3; }
+
+#scr-gate { position: relative; }
+/* en la pantalla de la clave el copito va arriba a la izquierda, en el cielo, lejos del teclado */
+#away-dot-gate { top: calc(env(safe-area-inset-top) + 2px); bottom: auto; left: 2px; }
+@media (display-mode: standalone), (display-mode: fullscreen) { #away-dot-gate { top: calc(max(env(safe-area-inset-top), 30px) - 26px); } }
+#away-dot-gate { left: 0; width: 34px; height: 34px; top: env(safe-area-inset-top); }
+@media (display-mode: standalone), (display-mode: fullscreen) { #away-dot-gate { top: calc(max(env(safe-area-inset-top), 30px) - 28px); } }
+#away-dot-gate { left: -12px; }

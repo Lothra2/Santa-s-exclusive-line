@@ -94,6 +94,11 @@ $('#modal').addEventListener('click', (e) => { if (e.target.id === 'modal' && !m
 // Escribe el texto letra por letra con sonidito y lo lee en voz alta
 async function sayIn(el, text, { who = 'narrator', actor = null, voice = true, spoken = null, speed = 26 } = {}) {
   let skip = false; const onSkip = () => (skip = true); el.addEventListener('click', onSkip, { once: true });
+  // reservamos el espacio del texto completo antes de escribirlo, así la pantalla no salta línea a línea
+  el.style.minHeight = '';
+  el.textContent = text;
+  const full = el.getBoundingClientRect().height;
+  if (full) el.style.minHeight = Math.ceil(full) + 'px';
   el.textContent = '';
   const speakP = voice && S().voice ? A.speak(spoken || text, { who, lang: lang(), onStart: () => actor && (actor.talking = true) }) : null;
   if (actor && !speakP) actor.talking = true;
@@ -234,38 +239,39 @@ async function santaVoicemail() {
   await sleep(1800);
   hang();
 }
-// Copito secreto: mantener presionado ~1 segundo, o 3 toques rápidos, cambia "elfos en casa".
-// Hecho a prueba de dedos en Android: sin deslizamiento ni menú, y tolera que el dedo se mueva un poquito.
-(function awayDot() {
-  const dot = $('#away-dot'); let timer = null, taps = [], startXY = null, fired = false;
-  const paint = () => dot.classList.toggle('on', !!S().elvesAway);
+// Copitos secretos (pantalla de la clave y del teléfono): mantener presionado ~1 segundo, o 3 toques rápidos,
+// cambia "elfos en casa". A prueba de dedos en Android: sin deslizamiento ni menú, y tolera que el dedo se mueva.
+(function awayDots() {
+  const dots = [...document.querySelectorAll('.away-dot')];
+  const paint = () => dots.forEach((d) => d.classList.toggle('on', !!S().elvesAway));
   paint();
-  const toggle = () => {
-    update((s) => (s.elvesAway = !s.elvesAway)); paint();
-    dot.classList.add('flash'); setTimeout(() => dot.classList.remove('flash'), 400);
-    try { navigator.vibrate && navigator.vibrate(S().elvesAway ? [30, 60, 30] : 40); } catch (x) {}
-    taps = [];
-  };
-  const down = (x, y) => { fired = false; startXY = [x, y]; clearTimeout(timer); timer = setTimeout(() => { fired = true; toggle(); }, 900); };
-  const move = (x, y) => { if (startXY && Math.hypot(x - startXY[0], y - startXY[1]) > 30) clearTimeout(timer); };
-  const up = () => {
-    clearTimeout(timer); startXY = null;
-    if (fired) return;
-    const now = Date.now(); taps = taps.filter((t) => now - t < 1300); taps.push(now);
-    if (taps.length >= 3) toggle();
-  };
-  // táctil (Android / iPhone)
-  dot.addEventListener('touchstart', (e) => { e.preventDefault(); e.stopPropagation(); const t = e.touches[0]; down(t.clientX, t.clientY); }, { passive: false });
-  dot.addEventListener('touchmove', (e) => { e.preventDefault(); const t = e.touches[0]; move(t.clientX, t.clientY); }, { passive: false });
-  dot.addEventListener('touchend', (e) => { e.preventDefault(); e.stopPropagation(); up(); }, { passive: false });
-  dot.addEventListener('touchcancel', () => { clearTimeout(timer); startXY = null; });
-  // mouse (computador)
-  dot.addEventListener('mousedown', (e) => { e.preventDefault(); e.stopPropagation(); down(e.clientX, e.clientY); });
-  dot.addEventListener('mousemove', (e) => move(e.clientX, e.clientY));
-  dot.addEventListener('mouseup', (e) => { e.stopPropagation(); up(); });
-  dot.addEventListener('mouseleave', () => clearTimeout(timer));
-  dot.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); });
-  dot.addEventListener('contextmenu', (e) => e.preventDefault());
+  dots.forEach((dot) => {
+    let timer = null, taps = [], startXY = null, fired = false;
+    const toggle = () => {
+      update((s) => (s.elvesAway = !s.elvesAway)); paint();
+      dot.classList.add('flash'); setTimeout(() => dot.classList.remove('flash'), 400);
+      try { navigator.vibrate && navigator.vibrate(S().elvesAway ? [30, 60, 30] : 40); } catch (x) {}
+      taps = [];
+    };
+    const down = (x, y) => { fired = false; startXY = [x, y]; clearTimeout(timer); timer = setTimeout(() => { fired = true; toggle(); }, 900); };
+    const move = (x, y) => { if (startXY && Math.hypot(x - startXY[0], y - startXY[1]) > 30) clearTimeout(timer); };
+    const up = () => {
+      clearTimeout(timer); startXY = null;
+      if (fired) return;
+      const now = Date.now(); taps = taps.filter((t) => now - t < 1300); taps.push(now);
+      if (taps.length >= 3) toggle();
+    };
+    dot.addEventListener('touchstart', (e) => { e.preventDefault(); e.stopPropagation(); const t = e.touches[0]; down(t.clientX, t.clientY); }, { passive: false });
+    dot.addEventListener('touchmove', (e) => { e.preventDefault(); const t = e.touches[0]; move(t.clientX, t.clientY); }, { passive: false });
+    dot.addEventListener('touchend', (e) => { e.preventDefault(); e.stopPropagation(); up(); }, { passive: false });
+    dot.addEventListener('touchcancel', () => { clearTimeout(timer); startXY = null; });
+    dot.addEventListener('mousedown', (e) => { e.preventDefault(); e.stopPropagation(); down(e.clientX, e.clientY); });
+    dot.addEventListener('mousemove', (e) => move(e.clientX, e.clientY));
+    dot.addEventListener('mouseup', (e) => { e.stopPropagation(); up(); });
+    dot.addEventListener('mouseleave', () => clearTimeout(timer));
+    dot.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); });
+    dot.addEventListener('contextmenu', (e) => e.preventDefault());
+  });
   window.paintAwayDot = paint;
 })();
 phoneCv.addEventListener('click', callNorthPole);
@@ -1157,6 +1163,22 @@ $('#btn-sound').addEventListener('click', () => {
   update((s) => (s.muted = !s.muted)); A.setMuted(S().muted); applyTexts();
   if (!S().muted) A.sfx.jingle();
 });
+
+/* ================== versión nueva: recargar sola ================== */
+async function checkUpdate() {
+  try {
+    const mine = document.querySelector('meta[name="app-version"]')?.content || '';
+    const r = await fetch('index.html?check=' + Date.now(), { cache: 'no-store' });
+    const html = await r.text();
+    const m = html.match(/name="app-version" content="(\d+)"/);
+    if (m && mine && m[1] !== mine && sessionStorage.getItem('reloadedFor') !== m[1]) {
+      sessionStorage.setItem('reloadedFor', m[1]);
+      location.reload();
+    }
+  } catch (e) {}
+}
+setTimeout(checkUpdate, 1500);
+document.addEventListener('visibilitychange', () => { if (!document.hidden && (current === 'gate' || current === 'phone')) checkUpdate(); });
 
 /* ================== inicio ================== */
 applyTexts();
