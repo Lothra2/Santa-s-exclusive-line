@@ -164,6 +164,7 @@ async function callNorthPole() {
   disp.textContent = '12-25 ★';
   await sleep(300);
   $('#phone-msg').textContent = t('ringing');
+  if (S().elvesAway) { await santaVoicemail(); return; } // contestador de los elfos
   for (let i = 0; i < 2; i++) { A.sfx.ring(); await sleep(1200); }
   $('#phone-msg').textContent = t('connecting');
   A.sfx.static(1.3); skyFx('aurora');
@@ -176,10 +177,85 @@ async function callNorthPole() {
   cancelAnimationFrame(phoneRAF);
   go('who');
 }
+// Contestador mágico de los elfos cuando están de excursión en la casa
+const AWAY_LINES = () => [
+  ['stripe', `¡Hola, hola! Habla ${elfName('stripe')}… ¡pero no estamos en el Polo Norte!`],
+  ['scarf', 'Brrr… es que estamos en tu casa. ¡Nos encantó jugar contigo y hacer travesuras!'],
+  ['green', 'Jijiji… ¿ya descubriste dónde nos escondimos? Te estamos cuidando con mucho cariño.'],
+  ['stripe', 'Cuando volvamos al taller, responderemos tu llamada. ¡Prometido de elfo!'],
+  ['all', '¡Te queremos mucho!'],
+];
+async function santaVoicemail() {
+  for (let i = 0; i < 4; i++) { A.sfx.ring(); await sleep(1250); }
+  A.sfx.pop(); A.sfx.static(0.5); await sleep(450);
+  $('#phone-msg').textContent = '📼 Contestador mágico de los elfos';
+  const box = openModal(`<div class="away-box"><h2>📼 Contestador mágico de los elfos</h2><canvas id="away-cv" width="384" height="200"></canvas><p id="away-text"></p><button class="pix-btn red" id="away-hang">📞 Colgar</button></div>`);
+  modalLocked = true;
+  // los tres elfos en la puerta de una casita con nieve
+  const cv = box.querySelector('#away-cv'); const W = 192, H = 100;
+  const st = makeStage(cv, W, H);
+  const elves = { scarf: new ElfActor('scarf', 58, 92), stripe: new ElfActor('stripe', 96, 93), green: new ElfActor('green', 134, 92) };
+  const snow = Array.from({ length: 30 }, () => ({ x: Math.random() * W, y: Math.random() * H, v: 6 + Math.random() * 8 }));
+  let alive = true, last = performance.now();
+  const frame = (now) => {
+    if (!alive) return;
+    const dt = Math.min(0.1, (now - last) / 1000); last = now; const t = now / 1000;
+    const g = st.b;
+    g.fillStyle = '#141a4e'; g.fillRect(0, 0, W, H);
+    // casita con ventana iluminada (su casa)
+    g.fillStyle = '#7a3b2e'; g.fillRect(8, 40, 34, 46); g.fillStyle = '#f4f8ff'; for (let j = 0; j < 8; j++) g.fillRect(4 + j, 32 + j, 42 - j * 2, 1);
+    g.fillStyle = Math.sin(t * 2) > -0.5 ? '#ffd86b' : '#e8a640'; g.fillRect(16, 52, 10, 9); g.fillStyle = '#5a3420'; g.fillRect(20, 52, 2, 9); g.fillRect(16, 56, 10, 1);
+    g.fillStyle = 'rgba(255,200,90,0.15)'; g.fillRect(12, 48, 18, 17);
+    g.fillStyle = '#e9efff'; g.fillRect(0, 88, W, 12);
+    g.fillStyle = '#fff'; snow.forEach((s) => { s.y += s.v * dt; if (s.y > H) { s.y = 0; s.x = Math.random() * W; } g.fillRect(Math.round(s.x), Math.round(s.y), 1, 1); });
+    Object.values(elves).forEach((e) => { e.update(dt); e.draw(g); });
+    st.c.imageSmoothingEnabled = false; st.c.drawImage(st.buf, 0, 0, cv.width, cv.height);
+    requestAnimationFrame(frame);
+  };
+  requestAnimationFrame(frame);
+  Object.values(elves).forEach((e) => e.do('wave'));
+  let hung = false;
+  const hang = () => { if (hung) return; hung = true; alive = false; A.stopVoice(); modalLocked = false; modalClose = null; closeModal(); A.sfx.pop(); ENTER_PHONE(); };
+  box.querySelector('#away-hang').onclick = hang;
+  const txt = box.querySelector('#away-text');
+  for (const [who, line] of AWAY_LINES()) {
+    if (hung) return;
+    if (who === 'all') {
+      A.sfx.jingle(); Object.values(elves).forEach((e) => { e.do('cheer'); e.heart(); e.talking = true; });
+      await sayIn(txt, line, { who: 'green' });
+      Object.values(elves).forEach((e) => (e.talking = false));
+    } else {
+      const e = elves[who]; e.do(who === 'green' ? 'spin' : 'hop');
+      await sayIn(txt, line, { who, actor: e });
+      await sleep(250);
+    }
+  }
+  if (hung) return;
+  await sleep(1800);
+  hang();
+}
+// Puntito secreto: mantener presionado 1 segundo cambia "elfos en casa"
+(function awayDot() {
+  const dot = $('#away-dot'); let timer = null;
+  const paint = () => dot.classList.toggle('on', !!S().elvesAway);
+  paint();
+  const start = (e) => { e.preventDefault(); e.stopPropagation(); clearTimeout(timer); timer = setTimeout(() => {
+    update((s) => (s.elvesAway = !s.elvesAway)); paint();
+    dot.classList.add('flash'); setTimeout(() => dot.classList.remove('flash'), 350);
+    try { navigator.vibrate && navigator.vibrate(S().elvesAway ? [30, 60, 30] : 40); } catch (x) {}
+  }, 1000); };
+  const cancel = () => clearTimeout(timer);
+  dot.addEventListener('pointerdown', start);
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach((ev) => dot.addEventListener(ev, cancel));
+  dot.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); });
+  dot.addEventListener('contextmenu', (e) => e.preventDefault());
+  window.paintAwayDot = paint;
+})();
 phoneCv.addEventListener('click', callNorthPole);
 $('#phone-msg').addEventListener('click', callNorthPole);
 function ENTER_PHONE() {
   phoneBusy = false; phoneLifted = 0;
+  if (window.paintAwayDot) window.paintAwayDot();
   $('#phone-display').classList.add('hidden');
   $('#phone-msg').textContent = t('tapPhone');
   cancelAnimationFrame(phoneRAF); phoneRAF = requestAnimationFrame(drawPhone);
@@ -917,7 +993,10 @@ function renderPanel() {
   let body = '';
   if (parentsTab === 'today') {
     const recent = [...s.diary.map((d) => ({ ...d, kind: 'd' })), ...s.stars.map((x) => ({ ...x, kind: 's' }))].sort((a, b) => (a.date < b.date ? 1 : -1)).slice(0, 12);
-    body = `<label>${p('who')}</label>${whoSeg(parentWho)}
+    body = `<h3>🏠 Elfos en casa</h3>
+      <p class="help">Cuando está activado, si llaman al Polo Norte contesta el contestador mágico: los tres elfos dicen que están en la casa jugando y haciendo travesuras, y que responderán cuando vuelvan al taller. También se cambia dejando presionado 1 segundo el puntito casi invisible abajo a la izquierda del teléfono rojo.</p>
+      <div class="seg"><button data-away="1" class="${s.elvesAway ? 'on' : ''}">🏠 En casa (no contestan)</button><button data-away="0" class="${!s.elvesAway ? 'on' : ''}">🎅 En el Polo Norte</button></div>
+      <label>${p('who')}</label>${whoSeg(parentWho)}
       <h3>📖 ${p('diary')}</h3><p class="help">${p('diaryHelp')}</p>
       <textarea id="pd-text" class="pix-input"></textarea><button id="pd-save" class="pix-btn green">${p('saveDiary')}</button>
       <h3>${p('star')}</h3>
@@ -974,6 +1053,7 @@ function bindPanel() {
   const r = $('#parents-root');
   r.querySelectorAll('[data-tab]').forEach((b) => b.onclick = () => { parentsTab = b.dataset.tab; renderPanel(); });
   r.querySelectorAll('[data-who]').forEach((b) => b.onclick = () => { parentWho = b.dataset.who; renderPanel(); });
+  r.querySelectorAll('[data-away]').forEach((b) => b.onclick = () => { update((s) => (s.elvesAway = b.dataset.away === '1')); if (window.paintAwayDot) window.paintAwayDot(); toast(S().elvesAway ? '🏠 Elfos en casa: contesta su contestador mágico' : '🎅 Elfos de vuelta en el Polo Norte'); renderPanel(); });
   r.querySelector('#pp-close').onclick = () => go(homeScreen());
   const on = (id, fn) => { const el = r.querySelector(id); if (el) el.onclick = fn; };
   on('#pd-save', () => { const v = $('#pd-text').value.trim(); if (!v) return; update((s) => s.diary.push({ id: uid(), date: today(), kid: parentWho, text: v })); toast(p('saved')); renderPanel(); });

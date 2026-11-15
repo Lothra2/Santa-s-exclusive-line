@@ -550,3 +550,12 @@ select.pix-input { appearance: none; -webkit-appearance: none; }
 .elf-tag { font-size: clamp(11px, 2.9vw, 15px); max-width: 34%; overflow: hidden; text-overflow: ellipsis; }
 .gate-start { animation: softpulse 1.4s ease-in-out infinite; }
 @keyframes softpulse { 50% { transform: scale(1.03); filter: brightness(1.08); } }
+
+/* Interruptor secreto "elfos en casa": casi invisible, se mantiene presionado 1 segundo */
+.away-dot { position: absolute; left: 4px; bottom: calc(env(safe-area-inset-bottom) + 4px); width: 40px; height: 40px; display: grid; place-items: center; -webkit-touch-callout: none; }
+.away-dot i { width: 5px; height: 5px; background: rgba(255,255,255,.22); }
+.away-dot.on i { background: rgba(255,170,90,.5); }
+.away-dot.flash i { transform: scale(2.2); background: rgba(255,210,63,.9); transition: transform .15s; }
+/* Buzón de Santa */
+.away-box h2 { color: var(--red); }
+.away-box canvas { width: 100%; max-width: 360px; height: auto; display: block; margin: 0 auto; clip-path: var(--corner); }
