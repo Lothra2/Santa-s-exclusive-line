@@ -559,3 +559,8 @@ select.pix-input { appearance: none; -webkit-appearance: none; }
 /* Buzón de Santa */
 .away-box h2 { color: var(--red); }
 .away-box canvas { width: 100%; max-width: 360px; height: auto; display: block; margin: 0 auto; clip-path: var(--corner); }
+/* copito secreto: parece un copo más del paisaje */
+.away-dot { left: 10px; bottom: calc(env(safe-area-inset-bottom) + 10px); width: 44px; height: 44px; }
+.away-dot .ico { width: 20px; height: 16px; opacity: .5; filter: drop-shadow(0 0 2px rgba(0,0,0,.6)); transition: transform .15s; }
+.away-dot.on .ico { opacity: .85; filter: sepia(1) saturate(6) hue-rotate(-10deg) brightness(1.2) drop-shadow(0 0 3px rgba(255,170,60,.9)); }
+.away-dot.flash .ico { transform: scale(1.6); }
