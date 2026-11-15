@@ -234,19 +234,36 @@ async function santaVoicemail() {
   await sleep(1800);
   hang();
 }
-// Puntito secreto: mantener presionado 1 segundo cambia "elfos en casa"
+// Copito secreto: mantener presionado ~1 segundo, o 3 toques rápidos, cambia "elfos en casa".
+// Hecho a prueba de dedos en Android: sin deslizamiento ni menú, y tolera que el dedo se mueva un poquito.
 (function awayDot() {
-  const dot = $('#away-dot'); let timer = null;
+  const dot = $('#away-dot'); let timer = null, taps = [], startXY = null, fired = false;
   const paint = () => dot.classList.toggle('on', !!S().elvesAway);
   paint();
-  const start = (e) => { e.preventDefault(); e.stopPropagation(); clearTimeout(timer); timer = setTimeout(() => {
+  const toggle = () => {
     update((s) => (s.elvesAway = !s.elvesAway)); paint();
-    dot.classList.add('flash'); setTimeout(() => dot.classList.remove('flash'), 350);
+    dot.classList.add('flash'); setTimeout(() => dot.classList.remove('flash'), 400);
     try { navigator.vibrate && navigator.vibrate(S().elvesAway ? [30, 60, 30] : 40); } catch (x) {}
-  }, 1000); };
-  const cancel = () => clearTimeout(timer);
-  dot.addEventListener('pointerdown', start);
-  ['pointerup', 'pointerleave', 'pointercancel'].forEach((ev) => dot.addEventListener(ev, cancel));
+    taps = [];
+  };
+  const down = (x, y) => { fired = false; startXY = [x, y]; clearTimeout(timer); timer = setTimeout(() => { fired = true; toggle(); }, 900); };
+  const move = (x, y) => { if (startXY && Math.hypot(x - startXY[0], y - startXY[1]) > 30) clearTimeout(timer); };
+  const up = () => {
+    clearTimeout(timer); startXY = null;
+    if (fired) return;
+    const now = Date.now(); taps = taps.filter((t) => now - t < 1300); taps.push(now);
+    if (taps.length >= 3) toggle();
+  };
+  // táctil (Android / iPhone)
+  dot.addEventListener('touchstart', (e) => { e.preventDefault(); e.stopPropagation(); const t = e.touches[0]; down(t.clientX, t.clientY); }, { passive: false });
+  dot.addEventListener('touchmove', (e) => { e.preventDefault(); const t = e.touches[0]; move(t.clientX, t.clientY); }, { passive: false });
+  dot.addEventListener('touchend', (e) => { e.preventDefault(); e.stopPropagation(); up(); }, { passive: false });
+  dot.addEventListener('touchcancel', () => { clearTimeout(timer); startXY = null; });
+  // mouse (computador)
+  dot.addEventListener('mousedown', (e) => { e.preventDefault(); e.stopPropagation(); down(e.clientX, e.clientY); });
+  dot.addEventListener('mousemove', (e) => move(e.clientX, e.clientY));
+  dot.addEventListener('mouseup', (e) => { e.stopPropagation(); up(); });
+  dot.addEventListener('mouseleave', () => clearTimeout(timer));
   dot.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); });
   dot.addEventListener('contextmenu', (e) => e.preventDefault());
   window.paintAwayDot = paint;

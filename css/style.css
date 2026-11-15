@@ -564,3 +564,5 @@ select.pix-input { appearance: none; -webkit-appearance: none; }
 .away-dot .ico { width: 20px; height: 16px; opacity: .5; filter: drop-shadow(0 0 2px rgba(0,0,0,.6)); transition: transform .15s; }
 .away-dot.on .ico { opacity: .85; filter: sepia(1) saturate(6) hue-rotate(-10deg) brightness(1.2) drop-shadow(0 0 3px rgba(255,170,60,.9)); }
 .away-dot.flash .ico { transform: scale(1.6); }
+
+.away-dot { touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; z-index: 3; }
