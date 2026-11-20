@@ -195,7 +195,6 @@ async function santaVoicemail() {
   A.sfx.pop(); A.sfx.static(0.5); await sleep(450);
   $('#phone-msg').textContent = '📼 Contestador mágico de los elfos';
   const box = openModal(`<div class="away-box"><h2>📼 Contestador mágico de los elfos</h2><canvas id="away-cv" width="384" height="200"></canvas><p id="away-text"></p><button class="pix-btn red" id="away-hang">📞 Colgar</button></div>`);
-  modalLocked = true;
   // los tres elfos en la puerta de una casita con nieve
   const cv = box.querySelector('#away-cv'); const W = 192, H = 100;
   const st = makeStage(cv, W, H);
@@ -222,6 +221,7 @@ async function santaVoicemail() {
   let hung = false;
   const hang = () => { if (hung) return; hung = true; alive = false; A.stopVoice(); modalLocked = false; modalClose = null; closeModal(); A.sfx.pop(); ENTER_PHONE(); };
   box.querySelector('#away-hang').onclick = hang;
+  modalClose = () => { if (!hung) { hung = true; alive = false; A.stopVoice(); ENTER_PHONE(); } };
   const txt = box.querySelector('#away-text');
   for (const [who, line] of AWAY_LINES()) {
     if (hung) return;
@@ -532,32 +532,35 @@ $('#btn-who').addEventListener('click', () => { A.sfx.tap(); go('who'); });
 let sessionStart = Date.now();
 async function showReports() {
   const kid = S().kid;
-  const pending = () => S().stars
+  const pending = S().stars
     .filter((s) => s.ts < sessionStart && s.ts > (S().seen[kid] || 0) && (kid === 'both' || s.kid === kid || s.kid === 'both') && !(s.readBy || []).includes(kid))
     .sort((x, y) => x.ts - y.ts);
-  if (!pending().length) return false;
-  for (const s of pending()) {
-    if (current !== 'hub') return true;
-    A.sfx.fanfare(); skyFx('stars');
-    const who = s.kid === 'both' ? t('both') : KIDS[s.kid].name;
-    const line = `¡${who} ganó una estrella! ${cap(s.reason)}.${s.reward ? ` Premio: ${s.reward}.` : ''}`;
-    const box = openModal(`<h2>${t('newReport')}</h2><canvas class="gift-big" id="rep-star"></canvas><p id="rep-text"></p><button class="pix-btn green" id="rep-ok">⭐ ¡Entendido!</button>`);
-    modalLocked = true; // solo se cierra con el botón, para que no se marque como leída por accidente
-    const cv = box.querySelector('#rep-star'); const src = bigIcon('star'); cv.width = src.width; cv.height = src.height; cv.getContext('2d').drawImage(src, 0, 0);
-    cv.style.animation = 'bob 1s ease-in-out infinite';
-    if (workshop) workshop.elves.green.do('cheer');
-    sayIn(box.querySelector('#rep-text'), line, { who: 'green', actor: workshop && workshop.elves.green });
-    const read = await new Promise((r) => {
-      box.querySelector('#rep-ok').onclick = () => { A.sfx.sparkle(); modalLocked = false; modalClose = null; closeModal(); r(true); };
-      modalClose = () => r(false);
-    });
-    modalLocked = false;
-    if (!read) return true; // se fue sin tocar Entendido: queda pendiente
-    // marcada como leída por esta niña: no vuelve a salir nunca más
-    const readers = kid === 'both' ? ['both', 'sophie', 'alana'] : [kid];
-    update((st) => { const it = st.stars.find((x) => x.id === s.id); if (it) { it.readBy = [...new Set([...(it.readBy || []), ...readers])]; } });
-    if (workshop) { workshop.elves.green.do('cheer'); workshop.elves.green.heart(); }
-  }
+  if (!pending.length || current !== 'hub') return false;
+  A.sfx.fanfare(); skyFx('stars');
+  const who = kidLabel(kid);
+  const name = (s) => (s.kid === 'both' ? 'Las dos' : KIDS[s.kid].name);
+  const items = pending.map((s) => `<li><b>⭐ ${esc(name(s))}:</b> ${esc(cap(s.reason))}${s.reward ? `<span class="rw">🎁 Premio: ${esc(s.reward)}</span>` : ''}</li>`).join('');
+  const title = pending.length === 1 ? t('newReport') : `¡${pending.length} estrellas nuevas en la Lista de los Buenos!`;
+  const box = openModal(`<div class="report"><h2>${esc(title)}</h2><canvas class="gift-big rep-star" id="rep-star"></canvas>
+    <p id="rep-text" class="rep-text"></p>${pending.length > 1 ? `<ul class="rep-list">${items}</ul>` : ''}
+    <div class="rep-actions"><button class="pix-btn green" id="rep-ok">⭐ ¡Entendido!</button></div></div>`);
+  const cv = box.querySelector('#rep-star'); const src = bigIcon('star'); cv.width = src.width; cv.height = src.height; cv.getContext('2d').drawImage(src, 0, 0);
+  cv.style.animation = 'bob 1s ease-in-out infinite';
+  const one = pending[0];
+  const line = pending.length === 1
+    ? `¡${name(one)} ganó una estrella! ${cap(one.reason)}.${one.reward ? ` Premio: ${one.reward}.` : ''}`
+    : `¡${who}, los elfos les trajeron ${pending.length} estrellas nuevas! Miren la lista.`;
+  if (workshop) workshop.elves.green.do('cheer');
+  sayIn(box.querySelector('#rep-text'), line, { who: 'green', actor: workshop && workshop.elves.green });
+  const read = await new Promise((r) => {
+    box.querySelector('#rep-ok').onclick = () => { A.sfx.sparkle(); modalClose = null; closeModal(); r(true); };
+    modalClose = () => r(false); // tocar afuera cierra, pero queda pendiente para la próxima vez
+  });
+  if (!read) return true;
+  const readers = kid === 'both' ? ['both', 'sophie', 'alana'] : [kid];
+  const ids = new Set(pending.map((s) => s.id));
+  update((st) => st.stars.forEach((it) => { if (ids.has(it.id)) it.readBy = [...new Set([...(it.readBy || []), ...readers])]; }));
+  if (workshop) { workshop.elves.green.do('cheer'); workshop.elves.green.heart(); }
   return true;
 }
 
@@ -960,24 +963,30 @@ function jarCanvas(n, col) {
   g.fillStyle = 'rgba(255,255,255,.6)'; g.fillRect(11, 14, 2, 20);
   return c;
 }
+let starsFilter = 'all';
 ENTER.stars = () => {
   if (A.currentSong() !== 'jingle') A.playSong('jingle', { vol: 0.4 });
-  const kid = S().kid;
   $('#jars').innerHTML = ['sophie', 'alana'].map((k) => {
     const n = starsOf(k).length;
-    return `<div class="jar ${kid !== 'both' && kid !== k ? 'dim' : ''}"><div class="who" style="color:${KIDS[k].color}">${KIDS[k].name}</div><canvas data-jar="${k}"></canvas><div class="count">★ ${n}</div><div class="meter-label">${t('goodMeter')}</div><div class="meter"><i style="width:${Math.min(100, 20 + n * 8)}%"></i></div></div>`;
+    return `<div class="jar"><div class="who" style="color:${KIDS[k].color}">${KIDS[k].name}</div><canvas data-jar="${k}"></canvas><div class="count">★ ${n}</div><div class="meter-label">${t('goodMeter')}</div><div class="meter"><i style="width:${Math.min(100, 20 + n * 8)}%"></i></div></div>`;
   }).join('');
   $$('[data-jar]').forEach((cv) => { const src = jarCanvas(starsOf(cv.dataset.jar).length, KIDS[cv.dataset.jar].color); cv.width = src.width; cv.height = src.height; cv.getContext('2d').drawImage(src, 0, 0); });
-  const list = S().stars.filter((s) => kid === 'both' || s.kid === kid || s.kid === 'both').slice().reverse();
-  const starURL = toURL(smallStar('#ffd23f'), 3);
-  $('#stars-list').innerHTML = list.length ? list.map((s) => `<div class="star-item"><img src="${starURL}" width="22" style="image-rendering:pixelated"><div>${esc(cap(s.reason))}<small>${esc(s.kid === 'both' ? t('both') : KIDS[s.kid].name)} · ${esc(s.date)}</small>${s.reward ? `<span class="rw">🎁 ${t('reward')}: ${esc(s.reward)}</span>` : ''}</div></div>`).join('') : `<div class="empty">${t('starsNone')}</div>`;
-  const n = kid === 'both' ? S().stars.length : starsOf(kid).length;
+  renderStarsList();
+  const n = S().stars.length;
   setTimeout(() => {
     if (current !== 'stars') return;
     skyFx('stars');
-    A.speak(lang() === 'es' ? (n ? `¡Tienes ${n} ${n === 1 ? 'estrella' : 'estrellas'} en la Lista de los Buenos!` : t('starsNone')) : (n ? `You have ${n} ${n === 1 ? 'star' : 'stars'} on the Nice List!` : t('starsNone')), { who: 'green', lang: lang() });
+    A.speak(n ? `¡En la Lista de los Buenos hay ${n} ${n === 1 ? 'estrella' : 'estrellas'}!` : t('starsNone'), { who: 'green', lang: lang() });
   }, 500);
 };
+function renderStarsList() {
+  const tabs = [['all', 'Todas'], ['sophie', 'Sophie'], ['alana', 'Alana'], ['both', 'Las dos']];
+  const list = S().stars.filter((s) => starsFilter === 'all' || s.kid === starsFilter || (starsFilter !== 'both' && s.kid === 'both')).slice().reverse();
+  const starURL = toURL(smallStar('#ffd23f'), 3);
+  $('#stars-list').innerHTML = `<div class="seg stars-tabs">${tabs.map(([k, l]) => `<button data-sf="${k}" class="${starsFilter === k ? 'on' : ''}">${l}</button>`).join('')}</div>` +
+    (list.length ? list.map((s) => `<div class="star-item"><img src="${starURL}" width="22" style="image-rendering:pixelated"><div>${esc(cap(s.reason))}<small>${esc(s.kid === 'both' ? 'Las dos' : KIDS[s.kid].name)} · ${esc(s.date)}</small>${s.reward ? `<span class="rw">🎁 ${t('reward')}: ${esc(s.reward)}</span>` : ''}</div></div>`).join('') : `<div class="empty">${t('starsNone')}</div>`);
+  $$('#stars-list [data-sf]').forEach((b) => (b.onclick = () => { A.sfx.tap(); starsFilter = b.dataset.sf; renderStarsList(); }));
+}
 
 /* ================== 9. Papás ================== */
 let pinBuf = '', parentsTab = 'today', parentWho = 'sophie';
